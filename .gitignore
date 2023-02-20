@@ -288,10 +288,8 @@ poetry.toml
 # Andraz custom entries
 andraz/local_settings.py
 andraz/sandbox.py
-andraz/data/images/
-andraz/data/labels/
-andraz/data/labels_1d/
-andraz/data/overlay/
+andraz/data/agriadapt/
+andraz/data/cofly/
 andraz/training/plots/
 andraz/training/wandb/
 andraz/training/garage/

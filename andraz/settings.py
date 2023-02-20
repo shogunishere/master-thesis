@@ -1,5 +1,5 @@
 try:
-    from local_settings import *
+    from andraz.local_settings import *
 except:
     pass
 
@@ -18,6 +18,6 @@ reset_parameters = True
 depth = 50
 
 try:
-    from local_settings import *
+    from andraz.local_settings import *
 except:
     pass
