@@ -2,12 +2,13 @@ import os
 
 import numpy as np
 import torch
-from torch import Generator, tensor, argmax, ones, zeros, cat
+from torch import Generator, tensor, argmax, ones, zeros, cat, unique
 from torch.utils.data import Dataset, random_split
 from torchvision import transforms
 
 from PIL import Image
 import matplotlib.pyplot as plt
+from torchvision.utils import draw_segmentation_masks
 
 import andraz.settings as settings
 
@@ -115,13 +116,21 @@ class ImageImporter:
         There are two classes in the segmentation mask labels:
         0 -> weeds
         1 -> lettuce
-        The indidces of the sementation mask are 1 and 2 respectively.
+        The indices of the segmentation mask are 1 and 2 respectively.
         Therefore, we create a 3-channel segmentation mask that separately recognises both weeds and lettuce.
+        mask[0] -> background
+        mask[1] -> weeds
+        mask[2] -> lettuce
         """
+        return self._fetch_infest_split("train"), self._fetch_infest_split("test")
+
+    def _fetch_infest_split(self, split="train"):
         images = sorted(
             os.listdir(
                 settings.PROJECT_DIR
-                + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/test/images/"
+                + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                + split
+                + "/images/"
             )
         )
         create_tensor = transforms.ToTensor()
@@ -131,7 +140,9 @@ class ImageImporter:
             tens = create_tensor(
                 Image.open(
                     settings.PROJECT_DIR
-                    + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/test/images/"
+                    + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                    + split
+                    + "/images/"
                     + file_name
                 )
             )
@@ -141,7 +152,7 @@ class ImageImporter:
 
             # Constructing the segmentation mask
             # We init the whole tensor as background
-            y = cat(
+            mask = cat(
                 (
                     ones(1, image_width, image_height),
                     zeros(2, image_width, image_height),
@@ -151,7 +162,9 @@ class ImageImporter:
             # Then, label by label, add to other classes and remove from background.
             with open(
                 settings.PROJECT_DIR
-                + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/test/labels/"
+                + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                + split
+                + "/labels/"
                 + file_name.replace("jpg", "txt")
             ) as rows:
                 labels = [row.rstrip() for row in rows]
@@ -159,9 +172,11 @@ class ImageImporter:
                     class_id, pixels = self._yolov7_label(
                         label, image_width, image_height
                     )
-                    print(class_id)
-
-            0 / 0
+                    # Change values based on received pixels
+                    for pixel in pixels:
+                        mask[0][pixel[0]][pixel[1]] = 0
+                        mask[class_id][pixel[0]][pixel[1]] = 1
+            y.append(mask)
 
         return ImageDataset(X, y)
 
@@ -170,20 +185,42 @@ class ImageImporter:
         Implement an image mask generation according to this:
         https://roboflow.com/formats/yolov7-pytorch-txt
         """
-        class_id, center_x, center_y, width, height = label.split(" ")
-        # TODO: implement returning pixels that correspond to given label (follow the link in the description)
-        return int(class_id) + 1, 0
+        # Deconstruct a row
+        class_id, center_x, center_y, width, height = [
+            float(x) for x in label.split(" ")
+        ]
+
+        # Get center pixel
+        center_x = center_x * image_width
+        center_y = center_y * image_height
+
+        # Get border pixels
+        top_border = int(center_x - (width / 2 * image_width))
+        bottom_border = int(center_x + (width / 2 * image_width))
+        left_border = int(center_y - (height / 2 * image_height))
+        right_border = int(center_y + (height / 2 * image_height))
+
+        # Generate pixels
+        pixels = []
+        for x in range(left_border, right_border):
+            for y in range(top_border, bottom_border):
+                pixels.append((x, y))
+
+        return int(class_id + 1), pixels
 
 
 if __name__ == "__main__":
     ii = ImageImporter("infest")
-    test = ii.get_dataset()
-    X, y = next(iter(test))
-    smaller = transforms.Resize((1280, 720))
-    X = smaller(X)
-    X = X.permute(1, 2, 0)
-    plt.imshow(X)
-    plt.show()
+    train, test = ii.get_dataset()
+    for X, y in train:
+        x_mask = torch.tensor(torch.mul(X, 255), dtype=torch.uint8)
+        mask = torch.tensor(y[1:], dtype=torch.bool)
+        image = draw_segmentation_masks(
+            x_mask, mask, colors=["yellow", "green"], alpha=0.5
+        )
+        plt.imshow(image.permute(1, 2, 0))
+        plt.show()
+        0 / 0
 
     # ii = ImageImporter("cofly")
     # train, test = ii.get_dataset()

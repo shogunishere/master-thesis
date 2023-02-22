@@ -13,8 +13,9 @@ from sklearn.metrics import confusion_matrix
 
 import torchvision.transforms.functional as F
 import andraz.settings as settings
-from andraz.data.data import get_dataset
+from andraz.data.data import ImageImporter
 from andraz.models.slim_unet import SlimUNet
+from andraz.training.evaluation import EvaluationHelper
 
 
 def get_config():
@@ -74,23 +75,28 @@ if __name__ == "__main__":
     else:
         device = "cpu"
 
-    train, test = get_dataset()
+    ii = ImageImporter("infest")
+    train, test = ii.get_dataset()
     train_loader = DataLoader(train, batch_size=settings.BATCH_SIZE, shuffle=False)
 
     loss_function = torch.nn.CrossEntropyLoss(
-        weight=tensor([0.16, 0.28, 0, 0.28, 0.28]).to(device)
+        # For cofly
+        # weight=tensor([0.16, 0.28, 0, 0.28, 0.28]).to(device)
+        # For infest
+        weight=tensor([0.2, 0.4, 0.4]).to(device)
     )
-
+    in_channels = 3
     # model = SimpleConv(3, 5)
-    model = SlimUNet(1, 2)
+    model = SlimUNet(in_channels)
     model.to(device)
     model.train()
 
     optimizer = Adam(model.parameters(), lr=settings.LEARNING_RATE)
+    evaluation = EvaluationHelper()
     first = True
-
     for epoch in range(settings.EPOCHS):
         losses = []
+        jac_scores = {x: [] for x in settings.width_mult_list}
         se = datetime.now()
         for X, y in train_loader:
             X, y = X.to(device), y.to(device)
@@ -102,6 +108,11 @@ if __name__ == "__main__":
                 loss = loss_function(outputs, y)
 
                 loss.backward()
+                y_jac = argmax(y, dim=1).to(device)
+                image = argmax(outputs, dim=1).to(device)
+                jac_scores[width_mult].append(
+                    evaluation.evaluate_jaccard(y_jac, image, in_channels)
+                )
             optimizer.step()
 
             # tps.append(metrics(y, outputs))
@@ -111,7 +122,14 @@ if __name__ == "__main__":
         print("Epoch Time: {}".format(datetime.now() - se))
 
         if settings.WANDB:
-            wandb.log({"Train/loss": np.mean(losses)})
+            jaccards = []
+            wandb.log(
+                {
+                    "Train/jaccard/{}".format(x): np.mean(jac_scores[x])
+                    for x in settings.width_mult_list
+                }
+                | {"Train/loss": np.mean(losses)}
+            )
 
         if epoch % 10 == 0:
             if first:

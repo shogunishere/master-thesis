@@ -4,7 +4,7 @@ from torch import nn
 
 
 class SlimUNet(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, out_channels):
         super(SlimUNet, self).__init__()
         self.conv1 = self.contract_block([3, 3, 3, 3], [16, 32, 48, 64], 3)
         self.conv2 = self.contract_block([16, 32, 48, 64], [32, 64, 96, 128], 3)
@@ -13,7 +13,10 @@ class SlimUNet(nn.Module):
         self.upconv2_ex = self.expand_block([32, 64, 96, 128], [16, 32, 48, 64], 3)
         self.upconv2 = self.contract_block([32, 64, 96, 128], [16, 32, 48, 64], 3)
         self.upconv1 = SlimmableConv2d(
-            [16, 32, 48, 64], [5, 5, 5, 5], 3, padding="same"
+            [16, 32, 48, 64],
+            [out_channels, out_channels, out_channels, out_channels],
+            3,
+            padding="same",
         )
 
         self.layers = [
