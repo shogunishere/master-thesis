@@ -20,7 +20,7 @@ model = torch.load(
 )
 
 # Load the dataset ("infest" -> labelled part of the dataset from Geo-K)
-ii = ImageImporter("infest", sample=True)
+ii = ImageImporter("infest")
 train, test = ii.get_dataset()
 test_loader = DataLoader(test, batch_size=1, shuffle=False)
 
