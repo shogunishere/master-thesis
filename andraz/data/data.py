@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -26,9 +27,13 @@ class ImageDataset(Dataset):
 
 
 class ImageImporter:
-    def __init__(self, dataset):
+    def __init__(self, dataset, sample=False):
         assert dataset in ["agriadapt", "cofly", "infest"]
         self._dataset = dataset
+        # Only take 10 images per set.
+        self.sample = sample
+
+        self.project_path = Path(settings.PROJECT_DIR)
 
     def get_dataset(self):
         if self._dataset == "agriadapt":
@@ -44,7 +49,7 @@ class ImageImporter:
         NOTE: There's a lot of images, if we don't batch import this, RAM will not be happy.
         """
         images = sorted(
-            os.listdir(settings.PROJECT_DIR + "data/agriadapt/UAV_IMG/UAV_IMG/")
+            os.listdir(self.project_path / "data/agriadapt/UAV_IMG/UAV_IMG/")
         )
         create_tensor = transforms.ToTensor()
         smaller = transforms.Resize((1280, 720))
@@ -53,9 +58,9 @@ class ImageImporter:
             tens = smaller(
                 create_tensor(
                     Image.open(
-                        settings.PROJECT_DIR
-                        + "data/agriadapt/UAV_IMG/UAV_IMG/"
-                        + file_name
+                        self.project_path
+                        / "data/agriadapt/UAV_IMG/UAV_IMG/"
+                        / file_name
                     )
                 )
             )
@@ -67,7 +72,7 @@ class ImageImporter:
         """
         Import images and their belonging segmentation masks (one-hot encoded).
         """
-        images = sorted(os.listdir(settings.PROJECT_DIR + "data/cofly/images/images/"))
+        images = sorted(os.listdir(self.project_path / "data/cofly/images/images/"))
         create_tensor = transforms.ToTensor()
 
         # If you want to do any other transformations
@@ -78,7 +83,7 @@ class ImageImporter:
             X.append(
                 create_tensor(
                     Image.open(
-                        settings.PROJECT_DIR + "data/cofly/images/images/" + file_name
+                        self.project_path / "data/cofly/images/images/" / file_name
                     )
                 )
             )
@@ -93,9 +98,9 @@ class ImageImporter:
                     tensor(
                         np.array(
                             Image.open(
-                                settings.PROJECT_DIR
-                                + "data/cofly/labels/labels/"
-                                + file_name
+                                self.project_path
+                                / "data/cofly/labels/labels/"
+                                / file_name
                             )
                         )
                     ).long(),
@@ -127,23 +132,26 @@ class ImageImporter:
     def _fetch_infest_split(self, split="train"):
         images = sorted(
             os.listdir(
-                settings.PROJECT_DIR
-                + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
-                + split
-                + "/images/"
+                self.project_path
+                / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                / split
+                / "images/"
             )
         )
         create_tensor = transforms.ToTensor()
         X, y = [], []
 
+        if self.sample:
+            images = images[:10]
+
         for file_name in images:
             tens = create_tensor(
                 Image.open(
-                    settings.PROJECT_DIR
-                    + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
-                    + split
-                    + "/images/"
-                    + file_name
+                    self.project_path
+                    / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                    / split
+                    / "images/"
+                    / file_name
                 )
             )
             X.append(tens)
@@ -161,11 +169,11 @@ class ImageImporter:
             )
             # Then, label by label, add to other classes and remove from background.
             with open(
-                settings.PROJECT_DIR
-                + "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
-                + split
-                + "/labels/"
-                + file_name.replace("jpg", "txt")
+                self.project_path
+                / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                / split
+                / "labels/"
+                / file_name.replace("jpg", "txt")
             ) as rows:
                 labels = [row.rstrip() for row in rows]
                 for label in labels:
@@ -220,7 +228,6 @@ if __name__ == "__main__":
         )
         plt.imshow(image.permute(1, 2, 0))
         plt.show()
-        0 / 0
 
     # ii = ImageImporter("cofly")
     # train, test = ii.get_dataset()

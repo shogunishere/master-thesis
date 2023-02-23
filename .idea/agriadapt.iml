@@ -6,11 +6,11 @@
       <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly/labels" />
       <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly/labels_1d" />
       <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly/overlay" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/training/garage" />
+      <excludeFolder url="file://$MODULE_DIR$/andraz/training/garage_old" />
       <excludeFolder url="file://$MODULE_DIR$/andraz/training/plots" />
       <excludeFolder url="file://$MODULE_DIR$/andraz/training/wandb" />
       <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/agriadapt" />
+      <excludeFolder url="file://$MODULE_DIR$/andraz/data/agriadapt_old" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
