@@ -290,7 +290,7 @@ andraz/local_settings.py
 andraz/sandbox.py
 andraz/data/agriadapt/
 andraz/data/cofly/
-andraz/training/plots/
 andraz/training/wandb/
 andraz/training/garage/
+andraz/evaluation/plots/
 # End of Andraz custom entries

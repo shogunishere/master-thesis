@@ -13,11 +13,11 @@ class SwitchableBatchNorm2d(nn.Module):
         for i in num_features_list:
             bns.append(nn.BatchNorm2d(i))
         self.bn = nn.ModuleList(bns)
-        self.width_mult = max(settings.width_mult_list)
+        self.width_mult = max(settings.WIDTHS)
         self.ignore_model_profiling = True
 
     def forward(self, input):
-        idx = settings.width_mult_list.index(self.width_mult)
+        idx = settings.WIDTHS.index(self.width_mult)
         y = self.bn[idx](input)
         return y
 
@@ -49,10 +49,10 @@ class SlimmableConv2d(nn.Conv2d):
         self.groups_list = groups_list
         if self.groups_list == [1]:
             self.groups_list = [1 for _ in range(len(in_channels_list))]
-        self.width_mult = max(settings.width_mult_list)
+        self.width_mult = max(settings.WIDTHS)
 
     def forward(self, input):
-        idx = settings.width_mult_list.index(self.width_mult)
+        idx = settings.WIDTHS.index(self.width_mult)
         self.in_channels = self.in_channels_list[idx]
         self.out_channels = self.out_channels_list[idx]
         self.groups = self.groups_list[idx]
@@ -74,10 +74,10 @@ class SlimmableLinear(nn.Linear):
         )
         self.in_features_list = in_features_list
         self.out_features_list = out_features_list
-        self.width_mult = max(settings.width_mult_list)
+        self.width_mult = max(settings.WIDTHS)
 
     def forward(self, input):
-        idx = settings.width_mult_list.index(self.width_mult)
+        idx = settings.WIDTHS.index(self.width_mult)
         self.in_features = self.in_features_list[idx]
         self.out_features = self.out_features_list[idx]
         weight = self.weight[: self.out_features, : self.in_features]

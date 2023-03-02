@@ -27,11 +27,13 @@ class ImageDataset(Dataset):
 
 
 class ImageImporter:
-    def __init__(self, dataset, sample=False):
+    def __init__(self, dataset, sample=False, validation=False):
         assert dataset in ["agriadapt", "cofly", "infest"]
         self._dataset = dataset
         # Only take 10 images per set.
         self.sample = sample
+        # If True, return validation instead of testing set (where applicable)
+        self.validation = validation
 
         self.project_path = Path(settings.PROJECT_DIR)
 
@@ -127,7 +129,10 @@ class ImageImporter:
         mask[1] -> weeds
         mask[2] -> lettuce
         """
-        return self._fetch_infest_split("train"), self._fetch_infest_split("test")
+        if self.validation:
+            return self._fetch_infest_split("train"), self._fetch_infest_split("valid")
+        else:
+            return self._fetch_infest_split("train"), self._fetch_infest_split("test")
 
     def _fetch_infest_split(self, split="train"):
         images = sorted(
