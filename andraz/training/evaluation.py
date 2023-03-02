@@ -36,7 +36,7 @@ class EvaluationHelper:
         """
         Import dataset that is used for evaluation.
         """
-        ii = ImageImporter(self.dataset)
+        ii = ImageImporter(self.dataset, sample=False)
         train, test = ii.get_dataset()
         self.test_loader = DataLoader(test, batch_size=1, shuffle=False)
 
@@ -104,13 +104,20 @@ class EvaluationHelper:
             x_mask = torch.tensor(
                 torch.mul(x.clone().detach().cpu(), 255), dtype=torch.uint8
             )
-            mask = argmax(y.clone().detach(), dim=0)
-            # print(mask)
-            # print(mask.shape)
-            # print(unique(mask.cpu()))
-            weed_mask = torch.where(mask == 1, True, False)[None, :, :]
-            lettuce_mask = torch.where(mask == 2, True, False)[None, :, :]
+            # To draw predictions
+            # mask = argmax(y.clone().detach(), dim=0)
+            # weed_mask = torch.where(mask == 1, True, False)[None, :, :]
+            # lettuce_mask = torch.where(mask == 2, True, False)[None, :, :]
+            # mask = cat((weed_mask, lettuce_mask), 0)
+            # To draw labels
+            mask = test.clone().detach()[1:]
+            weed_mask = torch.where(mask[0] == 1, True, False)[None, :, :]
+            lettuce_mask = torch.where(mask[1] == 1, True, False)[None, :, :]
             mask = cat((weed_mask, lettuce_mask), 0)
+            # print(unique(mask[0]))
+            # print(unique(mask[1]))
+            # 0 / 0
+
             # print(weed_mask.shape)
             # print(lettuce_mask.shape)
             # print(x_mask.shape)
@@ -121,9 +128,14 @@ class EvaluationHelper:
             )
             plt.imshow(image.permute(1, 2, 0))
             # plt.show()
-            plt.savefig(
-                "plots/infest/slim_unet/{}_{}_{}_overlay.png".format(batch, i, width)
-            )
+            # For saving predictions
+            # plt.savefig(
+            #     "plots/infest/slim_unet/{}_{}_{}_groundtruth.png".format(
+            #         batch, i, width
+            #     )
+            # )
+            # For saving ground truth
+            plt.savefig("plots/infest/slim_unet/{}_{}_groundtruth.png".format(batch, i))
 
             # x = x.cpu().float().permute(1, 2, 0)
             # test = argmax(test, dim=0).float()
@@ -159,7 +171,7 @@ if __name__ == "__main__":
 
     # Generate plots
     device = "cuda:0"
-    eh = EvaluationHelper(device=device, dataset="infest", class_num=3)
+    eh = EvaluationHelper(device=device, dataset="infest", class_num=3, visualise=True)
     eh.import_data()
 
     steps = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
@@ -168,49 +180,50 @@ if __name__ == "__main__":
     jac_std = {x: [] for x in settings.width_mult_list}
     tim_std = {x: [] for x in settings.width_mult_list}
     for step in steps:
-        model = "garage/slim_model_{}.pt".format(step)
+        model = "garage/infest/slim_model_{}.pt".format(step)
 
         jac_scores, run_times = eh.evaluate(model)
-        for x in settings.width_mult_list:
-            jaccards[x].append(np.mean(jac_scores[x]))
-            times[x].append(np.mean(run_times[x]))
-            jac_std[x].append(np.std(jac_scores[x]))
-            tim_std[x].append(np.std(run_times[x]))
+        break
+    # for x in settings.width_mult_list:
+    #     jaccards[x].append(np.mean(jac_scores[x]))
+    #     times[x].append(np.mean(run_times[x]))
+    #     jac_std[x].append(np.std(jac_scores[x]))
+    #     tim_std[x].append(np.std(run_times[x]))
 
-    jac_data = []
-    tim_data = []
-    for x in settings.width_mult_list:
-        jac_data.append(
-            go.Bar(
-                x=steps,
-                y=jaccards[x],
-                name=str(x),
-                error_y={"array": jac_std[x], "visible": True},
-            )
-        )
-        tim_data.append(
-            go.Bar(
-                x=steps,
-                y=times[x],
-                name=str(x),
-                error_y={"array": tim_std[x], "visible": True},
-            )
-        )
-    fig = go.Figure(data=jac_data)
-    fig.update_layout(
-        {
-            "title": "Jaccard index for different time steps and network widths",
-            "xaxis_title": "Epoch",
-            "yaxis_title": "Jaccard Index",
-        }
-    )
-    fig.show()
-    fig = go.Figure(data=tim_data)
-    fig.update_layout(
-        {
-            "title": "Inference times for different time steps and network widths",
-            "xaxis_title": "Epoch",
-            "yaxis_title": "Inference time",
-        }
-    )
-    fig.show()
+    # jac_data = []
+    # tim_data = []
+    # for x in settings.width_mult_list:
+    #     jac_data.append(
+    #         go.Bar(
+    #             x=steps,
+    #             y=jaccards[x],
+    #             name=str(x),
+    #             error_y={"array": jac_std[x], "visible": True},
+    #         )
+    #     )
+    #     tim_data.append(
+    #         go.Bar(
+    #             x=steps,
+    #             y=times[x],
+    #             name=str(x),
+    #             error_y={"array": tim_std[x], "visible": True},
+    #         )
+    #     )
+    # fig = go.Figure(data=jac_data)
+    # fig.update_layout(
+    #     {
+    #         "title": "Jaccard index for different time steps and network widths",
+    #         "xaxis_title": "Epoch",
+    #         "yaxis_title": "Jaccard Index",
+    #     }
+    # )
+    # fig.show()
+    # fig = go.Figure(data=tim_data)
+    # fig.update_layout(
+    #     {
+    #         "title": "Inference times for different time steps and network widths",
+    #         "xaxis_title": "Epoch",
+    #         "yaxis_title": "Inference time",
+    #     }
+    # )
+    # fig.show()
