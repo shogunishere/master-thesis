@@ -2,7 +2,7 @@ from datetime import datetime
 
 import torch
 import wandb as wandb
-from torch import tensor
+from torch import tensor, argmax
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
@@ -41,7 +41,7 @@ class Training:
             device = "cpu"
 
         # Prepare the data for training and validation
-        ii = ImageImporter("infest", validation=True, sample=True)
+        ii = ImageImporter("infest", validation=True, sample=False)
         train, validation = ii.get_dataset()
         train_loader = DataLoader(train, batch_size=settings.BATCH_SIZE, shuffle=True)
         valid_loader = DataLoader(
@@ -65,18 +65,22 @@ class Training:
         optimizer = Adam(model.parameters(), lr=settings.LEARNING_RATE)
 
         # Prepare the metrics tracker
-        m_names = [
-            "{}/{}/{}".format(x, y, int(z * 100))
-            for x in ["Loss"]
-            for y in ["train", "valid"]
-            for z in settings.WIDTHS
-        ] + [
-            "{}/{}/{}/{}".format(x, y, int(z * 100), w)
-            for x in ["Jaccard"]
-            for y in ["train", "valid"]
-            for z in settings.WIDTHS
-            for w in ["back", "weeds", "lettuce"]
-        ]
+        m_names = (
+            [
+                "{}/{}/{}".format(x, y, int(z * 100))
+                for x in ["Loss"]
+                for y in ["train", "valid"]
+                for z in settings.WIDTHS
+            ]
+            + [
+                "{}/{}/{}/{}".format(x, y, int(z * 100), w)
+                for x in ["Jaccard"]
+                for y in ["train", "valid"]
+                for z in settings.WIDTHS
+                for w in ["back", "weeds", "lettuce"]
+            ]
+            # + ["Image"]
+        )
         metrics = Metricise(m_names)
 
         for epoch in range(settings.EPOCHS):
@@ -132,12 +136,29 @@ class Training:
                             name,
                         )
 
+                        # if epoch % 10 == 0:
+                        # image = wandb.Image(
+                        #     X[0],
+                        #     masks={
+                        #         "predictions": {
+                        #             "mask_data": argmax(y_pred[0], dim=0).cpu().numpy(),
+                        #             "class_labels": {1: "weeds", 2: "lettuce"},
+                        #         },
+                        #         "ground_truth": {
+                        #             "mask_data": argmax(y[0], dim=0).cpu().numpy(),
+                        #             "class_labels": {1: "weeds", 2: "lettuce"},
+                        #         },
+                        #     },
+                        # )
+                        # metrics.add_image(image)
+
                         y_pred = get_binary_masks_infest(y_pred)
                         metrics.add_jaccard(y, y_pred, name)
+
             metrics.report_wandb(wandb)
 
-            if epoch % 100 == 0:
-                torch.save(model, "slim_model_{}.pt".format(epoch))
+            # if epoch % 100 == 0:
+            torch.save(model, "slim_model_{}.pt".format(epoch))
 
             print(
                 "Epoch {} completed. Running time: {}".format(epoch, datetime.now() - s)

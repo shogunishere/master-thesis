@@ -12,6 +12,8 @@ class Metricise:
 
     def _aggregate_metrics(self):
         for x in self.metrics:
+            if x == "Image":
+                continue
             self.metrics[x] = np.mean(self.metrics[x])
 
     def reset_metrics(self):
@@ -30,6 +32,9 @@ class Metricise:
     def _jaccard(self, y, y_pred, device="cuda:0"):
         jaccard = JaccardIndex("binary").to(device)
         return jaccard(y, y_pred).cpu()
+
+    def add_image(self, image):
+        self.metrics["Image"].append(image)
 
     def report_wandb(self, wandb):
         if settings.WANDB:
