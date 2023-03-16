@@ -14,7 +14,10 @@ class Metricise:
         for x in self.metrics:
             if x == "Image":
                 continue
-            self.metrics[x] = np.mean(self.metrics[x])
+            elif x == "learning rate":
+                self.metrics[x] = self.metrics[x][0]
+            else:
+                self.metrics[x] = np.mean(self.metrics[x])
 
     def reset_metrics(self):
         self.metrics = {x: [] for x in self.names}
@@ -35,6 +38,9 @@ class Metricise:
 
     def add_image(self, image):
         self.metrics["Image"].append(image)
+
+    def add_learning_rate(self, learning_rate):
+        self.metrics["learning_rate"].append(learning_rate)
 
     def report_wandb(self, wandb):
         if settings.WANDB:

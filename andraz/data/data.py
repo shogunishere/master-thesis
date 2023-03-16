@@ -146,7 +146,6 @@ class ImageImporter:
             )
         )
         create_tensor = transforms.ToTensor()
-        smaller = transforms.Resize((128, 128))
         X, y = [], []
 
         if self.sample:
@@ -161,6 +160,7 @@ class ImageImporter:
                 / file_name
             )
             if self.smaller:
+                smaller = transforms.Resize(self.smaller)
                 img = smaller(img)
             tens = create_tensor(img)
             X.append(tens)

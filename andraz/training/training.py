@@ -1,14 +1,17 @@
 from datetime import datetime
 
+import numpy as np
 import torch
 import wandb as wandb
 from fvcore.nn import FlopCountAnalysis, flop_count_table, parameter_count
 from torch import tensor, argmax
 from torch.optim import Adam
+from torch.optim.lr_scheduler import LinearLR
 from torch.utils.data import DataLoader
 from ptflops import get_model_complexity_info
 import thop
 import pthflops
+from plotly import graph_objects as go
 
 import andraz.settings as settings
 from andraz.data.data import ImageImporter
@@ -18,21 +21,43 @@ from andraz.models.slim_unet import SlimUNet
 
 
 class Training:
-    def __init__(self):
-        pass
+    def __init__(
+        self,
+        device,
+        epochs=settings.EPOCHS,
+        learning_rate=settings.LEARNING_RATE,
+        learning_rate_scheduler=settings.LEARNING_RATE_SCHEDULER,
+        batch_size=settings.BATCH_SIZE,
+        regularisation_l2=settings.REGULARISATION_L2,
+        image_resolution=settings.IMAGE_RESOLUTION,
+        widths=settings.WIDTHS,
+        verbose=1,
+    ):
+        self.device = device
+        self.epochs = epochs
+        self.learning_rate = learning_rate
+        self.learning_rate_scheduler = learning_rate_scheduler
+        self.batch_size = batch_size
+        self.regularisation_l2 = regularisation_l2
+        self.image_resolution = image_resolution
+        self.widths = widths
+        self.verbose = verbose
 
     def _report_settings(self):
         print("=======================================")
         print("Training with the following parameters:")
-        print("Epochs: {}".format(settings.EPOCHS))
-        print("Learning rate: {}".format(settings.LEARNING_RATE))
-        print("Batch size: {}".format(settings.BATCH_SIZE))
-        print("Network widths: {}".format(settings.WIDTHS))
+        print("Epochs: {}".format(self.epochs))
+        print("Learning rate: {}".format(self.learning_rate))
+        print("Learning rate scheduler: {}".format(self.learning_rate_scheduler))
+        print("Batch size: {}".format(self.batch_size))
+        print("L2 regularisation: {}".format(self.regularisation_l2))
+        print("Image resolution: {}".format(self.image_resolution))
+        print("Network widths: {}".format(self.widths))
         print("=======================================")
 
     def _report_model(self, model, input, loader):
         print("=======================================")
-        for width in settings.WIDTHS:
+        for width in self.widths:
             model.set_width(width)
             flops = FlopCountAnalysis(model, input)
             # Flops
@@ -65,51 +90,96 @@ class Training:
             # print(flop_count_table(flops))
         print("=======================================")
 
+    def _evaluate(self, metrics, loader, model, dataset_name, device, loss_function):
+        """
+        Evaluate performance and add to metrics.
+        """
+        for X, y in loader:
+            X, y = X.to(device), y.to(device)
+            for width in self.widths:
+                model.set_width(width)
+                y_pred = model.forward(X)
+
+                name = "{}/{}".format(dataset_name, int(width * 100))
+                metrics.add_loss(
+                    loss_function(y_pred, y).cpu(),
+                    name,
+                )
+
+                y_pred = get_binary_masks_infest(y_pred)
+                metrics.add_jaccard(y, y_pred, name)
+
+        return metrics
+
+    def _learning_rate_scheduler(self, optimizer):
+        if self.learning_rate_scheduler == "no scheduler":
+            return None
+        elif self.learning_rate_scheduler == "linear":
+            return LinearLR(
+                optimizer,
+                start_factor=1,
+                end_factor=0,
+                total_iters=self.epochs,
+            )
+
     def train(self):
-        print("Training process starting...")
-        self._report_settings()
+        if self.verbose:
+            print("Training process starting...")
+            self._report_settings()
 
         # Wandb report startup
         if settings.WANDB:
-            wandb.init(project="agriadapt", entity="colosal", config={})
-
-        # Train on GPU if available
-        if torch.cuda.is_available():
-            device = "cuda:0"
-        else:
-            device = "cpu"
+            wandb.init(
+                project="agriadapt",
+                entity="colosal",
+                config={
+                    "Batch Size": self.batch_size,
+                    "Epochs": self.epochs,
+                    "Learning Rate": self.learning_rate,
+                    "Learning Rate Scheduler": self.learning_rate_scheduler,
+                    "L2 Regularisation": self.regularisation_l2,
+                    "Image Resolution": self.image_resolution,
+                },
+            )
 
         # Prepare the data for training and validation
-        ii = ImageImporter("infest", validation=True, sample=True, smaller=True)
-        train, validation = ii.get_dataset()
-        train_loader = DataLoader(train, batch_size=settings.BATCH_SIZE, shuffle=True)
-        valid_loader = DataLoader(
-            validation, batch_size=settings.BATCH_SIZE, shuffle=False
+        ii = ImageImporter(
+            "infest", validation=True, sample=True, smaller=self.image_resolution
         )
+        train, validation = ii.get_dataset()
+        if self.verbose:
+            print("Number of training instances: {}".format(len(train)))
+            print("Number of validation instances: {}".format(len(validation)))
+
+        train_loader = DataLoader(train, batch_size=self.batch_size, shuffle=True)
+        valid_loader = DataLoader(validation, batch_size=self.batch_size, shuffle=False)
 
         # Prepare a weighted loss function
         loss_function = torch.nn.CrossEntropyLoss(
             # For cofly
-            # weight=tensor([0.16, 0.28, 0, 0.28, 0.28]).to(device)
+            # weight=tensor([0.16, 0.28, 0, 0.28, 0.28]).to(self.device)
             # For infest
-            weight=tensor([0.2, 0.4, 0.4]).to(device)
+            weight=tensor([0.2, 0.4, 0.4]).to(self.device)
         )
 
         # Prepare the model
         in_channels = 3
         model = SlimUNet(in_channels)
-        model.to(device)
-        X, _ = next(iter(train_loader))
-        X = X.to(device)
-        self._report_model(model, X, train_loader)
-        0 / 0
+        model.to(self.device)
+
+        # Report on flops/parameters of the model
+        # X, _ = next(iter(train_loader))
+        # X = X.to(self.device)
+        # self._report_model(model, X, train_loader)
+        # 0 / 0
 
         # Prepare the optimiser
         optimizer = Adam(
             model.parameters(),
-            lr=settings.LEARNING_RATE,
-            weight_decay=settings.REGULARISATION_L2,
+            lr=self.learning_rate,
+            weight_decay=self.regularisation_l2,
         )
+        scheduler = self._learning_rate_scheduler(optimizer)
 
         # Prepare the metrics tracker
         m_names = (
@@ -117,30 +187,31 @@ class Training:
                 "{}/{}/{}".format(x, y, int(z * 100))
                 for x in ["Loss"]
                 for y in ["train", "valid"]
-                for z in settings.WIDTHS
+                for z in self.widths
             ]
             + [
                 "{}/{}/{}/{}".format(x, y, int(z * 100), w)
                 for x in ["Jaccard"]
                 for y in ["train", "valid"]
-                for z in settings.WIDTHS
+                for z in self.widths
                 for w in ["back", "weeds", "lettuce"]
             ]
+            + ["learning_rate"]
             # + ["Image"]
         )
         metrics = Metricise(m_names)
 
-        for epoch in range(settings.EPOCHS):
+        for epoch in range(self.epochs):
             s = datetime.now()
-            model.train()
 
+            model.train()
             for X, y in train_loader:
                 # Move to GPU
-                X, y = X.to(device), y.to(device)
+                X, y = X.to(self.device), y.to(self.device)
                 # Reset optimiser
                 optimizer.zero_grad()
                 # For all set widths
-                for width in settings.WIDTHS:
+                for width in self.widths:
                     # Set the current width
                     model.set_width(width)
                     # Forward pass
@@ -152,48 +223,32 @@ class Training:
                 # Update weights
                 optimizer.step()
 
+            if self.learning_rate_scheduler == "no scheduler":
+                metrics.add_learning_rate(self.learning_rate)
+            else:
+                metrics.add_learning_rate(scheduler.get_last_lr())
+                scheduler.step()
+
             model.eval()
             with torch.no_grad():
                 # Training evaluation
-                for X, y in train_loader:
-                    X, y = X.to(device), y.to(device)
-                    for width in settings.WIDTHS:
-                        model.set_width(width)
-                        y_pred = model.forward(X)
-
-                        name = "train/{}".format(int(width * 100))
-                        metrics.add_loss(
-                            loss_function(y_pred, y).cpu(),
-                            name,
-                        )
-
-                        y_pred = get_binary_masks_infest(y_pred)
-                        metrics.add_jaccard(y, y_pred, name)
+                metrics = self._evaluate(
+                    metrics, valid_loader, model, "train", self.device, loss_function
+                )
 
                 # Validation evaluation
-                for X, y in valid_loader:
-                    X, y = X.to(device), y.to(device)
-                    for width in settings.WIDTHS:
-                        model.set_width(width)
-                        y_pred = model.forward(X)
-
-                        name = "valid/{}".format(int(width * 100))
-                        metrics.add_loss(
-                            loss_function(y_pred, y).cpu(),
-                            name,
-                        )
-
-                        y_pred = get_binary_masks_infest(y_pred)
-                        metrics.add_jaccard(y, y_pred, name)
+                metrics = self._evaluate(
+                    metrics, valid_loader, model, "valid", self.device, loss_function
+                )
 
             metrics.report_wandb(wandb)
-
-            # if epoch % 100 == 0:
             torch.save(model, "slim_model_{}.pt".format(str(epoch).zfill(4)))
-
-            print(
-                "Epoch {} completed. Running time: {}".format(epoch, datetime.now() - s)
-            )
+            if self.verbose:
+                print(
+                    "Epoch {} completed. Running time: {}".format(
+                        epoch, datetime.now() - s
+                    )
+                )
 
         if settings.WANDB:
             wandb.finish()
@@ -201,5 +256,11 @@ class Training:
 
 
 if __name__ == "__main__":
-    tr = Training()
+    # Train on GPU if available
+    if torch.cuda.is_available():
+        device = "cuda:0"
+    else:
+        device = "cpu"
+
+    tr = Training(device)
     tr.train()
