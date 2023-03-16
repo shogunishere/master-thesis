@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 import numpy as np
@@ -6,7 +7,7 @@ import wandb as wandb
 from fvcore.nn import FlopCountAnalysis, flop_count_table, parameter_count
 from torch import tensor, argmax
 from torch.optim import Adam
-from torch.optim.lr_scheduler import LinearLR
+from torch.optim.lr_scheduler import LinearLR, ExponentialLR
 from torch.utils.data import DataLoader
 from ptflops import get_model_complexity_info
 import thop
@@ -32,6 +33,7 @@ class Training:
         image_resolution=settings.IMAGE_RESOLUTION,
         widths=settings.WIDTHS,
         verbose=1,
+        wandb_group=None,
     ):
         self.device = device
         self.epochs = epochs
@@ -42,6 +44,7 @@ class Training:
         self.image_resolution = image_resolution
         self.widths = widths
         self.verbose = verbose
+        self.wandb_group = wandb_group
 
     def _report_settings(self):
         print("=======================================")
@@ -121,6 +124,8 @@ class Training:
                 end_factor=0,
                 total_iters=self.epochs,
             )
+        elif self.learning_rate_scheduler == "exponential":
+            return ExponentialLR(optimizer, 0.9)
 
     def train(self):
         if self.verbose:
@@ -128,10 +133,12 @@ class Training:
             self._report_settings()
 
         # Wandb report startup
+        garage_path = ""
         if settings.WANDB:
-            wandb.init(
+            run = wandb.init(
                 project="agriadapt",
                 entity="colosal",
+                group=self.wandb_group,
                 config={
                     "Batch Size": self.batch_size,
                     "Epochs": self.epochs,
@@ -141,10 +148,15 @@ class Training:
                     "Image Resolution": self.image_resolution,
                 },
             )
+            wname = run.name.split("-")
+            garage_path = "garage/infest/{} {} {}/".format(
+                wname[2].zfill(4), wname[0], wname[1]
+            )
+            os.mkdir(garage_path)
 
         # Prepare the data for training and validation
         ii = ImageImporter(
-            "infest", validation=True, sample=True, smaller=self.image_resolution
+            "infest", validation=True, sample=False, smaller=self.image_resolution
         )
         train, validation = ii.get_dataset()
         if self.verbose:
@@ -233,7 +245,7 @@ class Training:
             with torch.no_grad():
                 # Training evaluation
                 metrics = self._evaluate(
-                    metrics, valid_loader, model, "train", self.device, loss_function
+                    metrics, train_loader, model, "train", self.device, loss_function
                 )
 
                 # Validation evaluation
@@ -242,7 +254,9 @@ class Training:
                 )
 
             metrics.report_wandb(wandb)
-            torch.save(model, "slim_model_{}.pt".format(str(epoch).zfill(4)))
+            torch.save(
+                model, garage_path + "slim_model_{}.pt".format(str(epoch).zfill(4))
+            )
             if self.verbose:
                 print(
                     "Epoch {} completed. Running time: {}".format(
@@ -252,7 +266,7 @@ class Training:
 
         if settings.WANDB:
             wandb.finish()
-        torch.save(model, "slim_model.pt".format(epoch))
+        torch.save(model, garage_path + "slim_model.pt".format(epoch))
 
 
 if __name__ == "__main__":
@@ -262,5 +276,5 @@ if __name__ == "__main__":
     else:
         device = "cpu"
 
-    tr = Training(device)
+    tr = Training(device, wandb_group="Test group")
     tr.train()
