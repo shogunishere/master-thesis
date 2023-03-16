@@ -4,21 +4,23 @@ import torch
 from matplotlib import pyplot as plt, animation
 from torch import argmax, cat
 from torch.utils.data import DataLoader
+from torchvision.transforms import Resize
 from torchvision.utils import draw_segmentation_masks
+
 
 from andraz.data.data import ImageImporter
 
 
 class GifFactory:
-    def generate_images(self):
-        model_dir = "../training/garage/infest/0002/"
+    def generate_images(self, model_dir):
         device = "cuda:0"
 
-        ii = ImageImporter("infest", sample=True)
+        ii = ImageImporter("infest", sample=True, smaller=False)
         train, test = ii.get_dataset()
         test_loader = DataLoader(test)
+        bigger = Resize((640, 640))
 
-        for model_path in os.listdir(model_dir):
+        for model_path in sorted(os.listdir(model_dir)):
             model = torch.load(model_dir + model_path)
             model = model.to(device)
             model.eval()
@@ -28,7 +30,8 @@ class GifFactory:
                 next(it)
                 X, y = next(it)
                 X, y = X.to(device), y.to(device)
-                y_pred = model(X)
+                y_pred = bigger(model(X))
+                X = bigger(X)
                 x_mask = torch.tensor(
                     torch.mul(X[0].clone().detach().cpu(), 255), dtype=torch.uint8
                 )
@@ -53,7 +56,7 @@ class GifFactory:
                     )
                 )
 
-    def generate_gif(self):
+    def generate_gif(self, image_dir):
         # Create new figure for GIF
         fig, ax = plt.subplots()
 
@@ -62,16 +65,15 @@ class GifFactory:
         ax.axis("off")
         ims = []
 
-        image_dir = "plots/infest/gif/"
         for image in sorted(os.listdir(image_dir)):
             im = ax.imshow(plt.imread(image_dir + image), animated=True)
             ims.append([im])
 
         ani = animation.ArtistAnimation(fig, ims, interval=100)
-        ani.save("masks.gif")
+        ani.save("plots/masks.gif")
 
 
 if __name__ == "__main__":
     gf = GifFactory()
-    gf.generate_images()
-    gf.generate_gif()
+    gf.generate_images(model_dir="../training/garage/infest/0003/")
+    gf.generate_gif(image_dir="plots/infest/gif/")

@@ -2,9 +2,13 @@ from datetime import datetime
 
 import torch
 import wandb as wandb
+from fvcore.nn import FlopCountAnalysis, flop_count_table, parameter_count
 from torch import tensor, argmax
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from ptflops import get_model_complexity_info
+import thop
+import pthflops
 
 import andraz.settings as settings
 from andraz.data.data import ImageImporter
@@ -26,6 +30,41 @@ class Training:
         print("Network widths: {}".format(settings.WIDTHS))
         print("=======================================")
 
+    def _report_model(self, model, input, loader):
+        print("=======================================")
+        for width in settings.WIDTHS:
+            model.set_width(width)
+            flops = FlopCountAnalysis(model, input)
+            # Flops
+            # Facebook Research
+            # Parameters
+            # Facebook Research
+
+            # https://discuss.pytorch.org/t/how-do-i-check-the-number-of-parameters-of-a-model/4325/8
+            print(sum(p.numel() for p in model.parameters() if p.requires_grad))
+            # https://pypi.org/project/ptflops/
+            print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+            print(flops.total(), sum([x for x in parameter_count(model).values()]))
+            print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+            print("-----------------------------")
+            print(
+                get_model_complexity_info(
+                    model, (3, 128, 128), print_per_layer_stat=False
+                )
+            )
+            print("-----------------------------")
+            print("*****************************")
+            print(thop.profile(model, (input,)))
+            print("*****************************")
+            print("?????????????????????????????")
+            print(pthflops.count_ops(model, input))
+            print("?????????????????????????????")
+            # print(flops.by_operator())
+            # print(flops.by_module())
+            # print(flops.by_module_and_operator())
+            # print(flop_count_table(flops))
+        print("=======================================")
+
     def train(self):
         print("Training process starting...")
         self._report_settings()
@@ -41,7 +80,7 @@ class Training:
             device = "cpu"
 
         # Prepare the data for training and validation
-        ii = ImageImporter("infest", validation=True, sample=False)
+        ii = ImageImporter("infest", validation=True, sample=True, smaller=True)
         train, validation = ii.get_dataset()
         train_loader = DataLoader(train, batch_size=settings.BATCH_SIZE, shuffle=True)
         valid_loader = DataLoader(
@@ -60,9 +99,17 @@ class Training:
         in_channels = 3
         model = SlimUNet(in_channels)
         model.to(device)
+        X, _ = next(iter(train_loader))
+        X = X.to(device)
+        self._report_model(model, X, train_loader)
+        0 / 0
 
         # Prepare the optimiser
-        optimizer = Adam(model.parameters(), lr=settings.LEARNING_RATE)
+        optimizer = Adam(
+            model.parameters(),
+            lr=settings.LEARNING_RATE,
+            weight_decay=settings.REGULARISATION_L2,
+        )
 
         # Prepare the metrics tracker
         m_names = (
@@ -136,29 +183,13 @@ class Training:
                             name,
                         )
 
-                        # if epoch % 10 == 0:
-                        # image = wandb.Image(
-                        #     X[0],
-                        #     masks={
-                        #         "predictions": {
-                        #             "mask_data": argmax(y_pred[0], dim=0).cpu().numpy(),
-                        #             "class_labels": {1: "weeds", 2: "lettuce"},
-                        #         },
-                        #         "ground_truth": {
-                        #             "mask_data": argmax(y[0], dim=0).cpu().numpy(),
-                        #             "class_labels": {1: "weeds", 2: "lettuce"},
-                        #         },
-                        #     },
-                        # )
-                        # metrics.add_image(image)
-
                         y_pred = get_binary_masks_infest(y_pred)
                         metrics.add_jaccard(y, y_pred, name)
 
             metrics.report_wandb(wandb)
 
             # if epoch % 100 == 0:
-            torch.save(model, "slim_model_{}.pt".format(epoch))
+            torch.save(model, "slim_model_{}.pt".format(str(epoch).zfill(4)))
 
             print(
                 "Epoch {} completed. Running time: {}".format(epoch, datetime.now() - s)
@@ -166,7 +197,7 @@ class Training:
 
         if settings.WANDB:
             wandb.finish()
-        torch.save(model, "slim_model_{}.pt".format(epoch))
+        torch.save(model, "slim_model.pt".format(epoch))
 
 
 if __name__ == "__main__":

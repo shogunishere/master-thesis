@@ -27,13 +27,15 @@ class ImageDataset(Dataset):
 
 
 class ImageImporter:
-    def __init__(self, dataset, sample=False, validation=False):
+    def __init__(self, dataset, sample=False, validation=False, smaller=False):
         assert dataset in ["agriadapt", "cofly", "infest"]
         self._dataset = dataset
         # Only take 10 images per set.
         self.sample = sample
         # If True, return validation instead of testing set (where applicable)
         self.validation = validation
+        # Make the images smaller
+        self.smaller = smaller
 
         self.project_path = Path(settings.PROJECT_DIR)
 
@@ -144,24 +146,28 @@ class ImageImporter:
             )
         )
         create_tensor = transforms.ToTensor()
+        smaller = transforms.Resize((128, 128))
         X, y = [], []
 
         if self.sample:
             images = images[:10]
 
         for file_name in images:
-            tens = create_tensor(
-                Image.open(
-                    self.project_path
-                    / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
-                    / split
-                    / "images/"
-                    / file_name
-                )
+            img = Image.open(
+                self.project_path
+                / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                / split
+                / "images/"
+                / file_name
             )
+            if self.smaller:
+                img = smaller(img)
+            tens = create_tensor(img)
             X.append(tens)
             image_width = tens.shape[1]
             image_height = tens.shape[2]
+            # image_width = 640
+            # image_height = 640
 
             # Constructing the segmentation mask
             # We init the whole tensor as background
