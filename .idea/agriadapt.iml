@@ -11,6 +11,7 @@
       <excludeFolder url="file://$MODULE_DIR$/andraz/training/wandb" />
       <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly" />
       <excludeFolder url="file://$MODULE_DIR$/andraz/data/agriadapt_old" />
+      <excludeFolder url="file://$MODULE_DIR$/andraz/training/garage" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -15,6 +15,7 @@ from plotly import graph_objects as go
 
 import andraz.settings as settings
 from andraz.data.data import ImageImporter
+from andraz.helpers.metricise import Metricise
 
 
 class EvaluationHelper:
@@ -40,7 +41,7 @@ class EvaluationHelper:
         train, test = ii.get_dataset()
         self.test_loader = DataLoader(test, batch_size=1, shuffle=False)
 
-    def evaluate(self, model_path):
+    def evaluate(self, model_path, device="cuda:0"):
         """
         Evaluate a given method with requested metrics.
         Optionally also visualise segmentation masks/overlays.
@@ -161,6 +162,19 @@ class EvaluationHelper:
 
 
 if __name__ == "__main__":
+    dataset = ImageImporter("infest", validation=True, sample=True, smaller=(10, 10))
+    metrics = Metricise(["True Positive"])
+    model = torch.load("../training/garage/infest/0150 sandy firefly/slim_model.pt")
+
+    train, validation = dataset.get_dataset()
+
+    X, y = next(iter(train))
+
+    X = X[None, :]
+    y = y[None, :]
+
+    metrics.add_tp(y, y, "train")
+
     # Generate images
     # device = "cuda:0"
     # eh = EvaluationHelper(device=device, dataset="infest", class_num=3, visualise=True)
@@ -170,20 +184,20 @@ if __name__ == "__main__":
     # jac_scores, run_times = eh.evaluate(model)
 
     # Generate plots
-    device = "cuda:0"
-    eh = EvaluationHelper(device=device, dataset="infest", class_num=3, visualise=True)
-    eh.import_data()
+    # device = "cuda:0"
+    # eh = EvaluationHelper(device=device, dataset="infest", class_num=3, visualise=True)
+    # eh.import_data()
 
-    steps = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
-    jaccards = {x: [] for x in settings.width_mult_list}
-    times = {x: [] for x in settings.width_mult_list}
-    jac_std = {x: [] for x in settings.width_mult_list}
-    tim_std = {x: [] for x in settings.width_mult_list}
-    for step in steps:
-        model = "garage/infest/slim_model_{}.pt".format(step)
-
-        jac_scores, run_times = eh.evaluate(model)
-        break
+    # steps = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+    # jaccards = {x: [] for x in settings.width_mult_list}
+    # times = {x: [] for x in settings.width_mult_list}
+    # jac_std = {x: [] for x in settings.width_mult_list}
+    # tim_std = {x: [] for x in settings.width_mult_list}
+    # for step in steps:
+    #     model = "garage/infest/slim_model_{}.pt".format(step)
+    #
+    #     jac_scores, run_times = eh.evaluate(model)
+    #     break
     # for x in settings.width_mult_list:
     #     jaccards[x].append(np.mean(jac_scores[x]))
     #     times[x].append(np.mean(run_times[x]))

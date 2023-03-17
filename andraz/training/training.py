@@ -111,6 +111,7 @@ class Training:
 
                 y_pred = get_binary_masks_infest(y_pred)
                 metrics.add_jaccard(y, y_pred, name)
+                metrics.add_precision(y, y_pred, name)
 
         return metrics
 
@@ -125,7 +126,10 @@ class Training:
                 total_iters=self.epochs,
             )
         elif self.learning_rate_scheduler == "exponential":
-            return ExponentialLR(optimizer, 0.9)
+            return ExponentialLR(
+                optimizer,
+                0.99,
+            )
 
     def train(self):
         if self.verbose:
@@ -203,7 +207,7 @@ class Training:
             ]
             + [
                 "{}/{}/{}/{}".format(x, y, int(z * 100), w)
-                for x in ["Jaccard"]
+                for x in ["Jaccard", "Precision"]
                 for y in ["train", "valid"]
                 for z in self.widths
                 for w in ["back", "weeds", "lettuce"]
@@ -276,5 +280,5 @@ if __name__ == "__main__":
     else:
         device = "cpu"
 
-    tr = Training(device, wandb_group="Test group")
+    tr = Training(device)
     tr.train()
