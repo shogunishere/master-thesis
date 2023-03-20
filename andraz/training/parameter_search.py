@@ -19,7 +19,7 @@ PARAMETERS = [
         "BATCH_SIZE": BATCH_SIZE,
         "EPOCHS": EPOCHS,
         "LEARNING_RATE": LEARNING_RATE,
-        "LEARNING_RATE_SCHEDULER": "linear",
+        "LEARNING_RATE_SCHEDULER": "no scheduler",
         "REGULARISATION_L2": REGULARISATION_L2,
         "IMAGE_RESOLUTION": IMAGE_RESOLUTION,
     },
@@ -27,7 +27,7 @@ PARAMETERS = [
         "BATCH_SIZE": BATCH_SIZE,
         "EPOCHS": EPOCHS,
         "LEARNING_RATE": LEARNING_RATE,
-        "LEARNING_RATE_SCHEDULER": "no scheduler",
+        "LEARNING_RATE_SCHEDULER": "linear",
         "REGULARISATION_L2": REGULARISATION_L2,
         "IMAGE_RESOLUTION": IMAGE_RESOLUTION,
     },
@@ -61,7 +61,7 @@ class GPUThread(Thread):
                 regularisation_l2=self.parameters["REGULARISATION_L2"],
                 image_resolution=self.parameters["IMAGE_RESOLUTION"],
                 verbose=0,
-                wandb_group=self.parameters["LEARNING_RATE_SCHEDULER"] + " 003",
+                wandb_group=self.parameters["LEARNING_RATE_SCHEDULER"] + " 005",
             )
             tr.train()
         self.done = True

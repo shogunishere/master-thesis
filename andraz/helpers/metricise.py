@@ -45,6 +45,7 @@ class Metricise:
                     self.metrics["Precision/{}/{}".format(name, classes[j])].append(0)
                 else:
                     self.metrics["Precision/{}/{}".format(name, classes[j])].append(
+                        # For the binary precision evaluation to work, we need 1D array
                         precision_score(
                             [
                                 int(xx)

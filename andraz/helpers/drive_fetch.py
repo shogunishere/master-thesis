@@ -7,19 +7,27 @@ import gdown
 from andraz import settings
 
 
-def setup_env():
+def setup_env(data=True, models=True):
     project_dir = Path(settings.PROJECT_DIR)
+
     # Download the data
-    setup_folder(
-        "https://drive.google.com/file/d/1w2jbor9QR3iUQ0V1pphsmNHw4ZZdgf_f/view?usp=share_link",
-        project_dir
-        / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
-    )
+    if data:
+        setup_folder(
+            "https://drive.google.com/file/d/1w2jbor9QR3iUQ0V1pphsmNHw4ZZdgf_f/view?usp=share_link",
+            project_dir
+            / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
+        )
+
     # Download the models
-    setup_folder(
-        "https://drive.google.com/file/d/1F8wtjxjESxWRomzAxuR43tJ2bOptTMfT/view?usp=share_link",
-        project_dir / "training/garage/",
-    )
+    if models:
+        # setup_folder(
+        #     "https://drive.google.com/file/d/1F8wtjxjESxWRomzAxuR43tJ2bOptTMfT/view?usp=share_link",
+        #     project_dir / "training/garage/",
+        # )
+        setup_folder(
+            "https://drive.google.com/file/d/1252exvJsH_ljJafm7qbQzXld3S1rxmuY/view?usp=sharing",
+            project_dir / "training/garage/",
+        )
 
 
 def setup_folder(url, path):

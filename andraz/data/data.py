@@ -27,7 +27,9 @@ class ImageDataset(Dataset):
 
 
 class ImageImporter:
-    def __init__(self, dataset, sample=False, validation=False, smaller=False):
+    def __init__(
+        self, dataset, sample=False, validation=False, smaller=False, only_test=False
+    ):
         assert dataset in ["agriadapt", "cofly", "infest"]
         self._dataset = dataset
         # Only take 10 images per set.
@@ -36,6 +38,8 @@ class ImageImporter:
         self.validation = validation
         # Make the images smaller
         self.smaller = smaller
+        # Only return the test dataset (first part of returned tuple empty)
+        self.only_test = only_test
 
         self.project_path = Path(settings.PROJECT_DIR)
 
@@ -134,7 +138,12 @@ class ImageImporter:
         if self.validation:
             return self._fetch_infest_split("train"), self._fetch_infest_split("valid")
         else:
-            return self._fetch_infest_split("train"), self._fetch_infest_split("test")
+            if self.only_test:
+                return None, self._fetch_infest_split("test")
+            else:
+                return self._fetch_infest_split("train"), self._fetch_infest_split(
+                    "test"
+                )
 
     def _fetch_infest_split(self, split="train"):
         images = sorted(

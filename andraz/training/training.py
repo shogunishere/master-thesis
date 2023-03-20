@@ -135,6 +135,14 @@ class Training:
         if self.verbose:
             print("Training process starting...")
             self._report_settings()
+        # Prepare the data for training and validation
+        ii = ImageImporter(
+            "infest", validation=True, sample=False, smaller=self.image_resolution
+        )
+        train, validation = ii.get_dataset()
+        if self.verbose:
+            print("Number of training instances: {}".format(len(train)))
+            print("Number of validation instances: {}".format(len(validation)))
 
         # Wandb report startup
         garage_path = ""
@@ -150,6 +158,8 @@ class Training:
                     "Learning Rate Scheduler": self.learning_rate_scheduler,
                     "L2 Regularisation": self.regularisation_l2,
                     "Image Resolution": self.image_resolution,
+                    "Train Samples": len(train),
+                    "Validation Samples": len(validation),
                 },
             )
             wname = run.name.split("-")
@@ -157,15 +167,6 @@ class Training:
                 wname[2].zfill(4), wname[0], wname[1]
             )
             os.mkdir(garage_path)
-
-        # Prepare the data for training and validation
-        ii = ImageImporter(
-            "infest", validation=True, sample=False, smaller=self.image_resolution
-        )
-        train, validation = ii.get_dataset()
-        if self.verbose:
-            print("Number of training instances: {}".format(len(train)))
-            print("Number of validation instances: {}".format(len(validation)))
 
         train_loader = DataLoader(train, batch_size=self.batch_size, shuffle=True)
         valid_loader = DataLoader(validation, batch_size=self.batch_size, shuffle=False)
