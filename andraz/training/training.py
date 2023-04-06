@@ -18,6 +18,7 @@ import andraz.settings as settings
 from andraz.data.data import ImageImporter
 from andraz.helpers.masking import get_binary_masks_infest
 from andraz.helpers.metricise import Metricise
+from andraz.helpers.model_profiling import model_profiling
 from andraz.models.slim_unet import SlimUNet
 
 
@@ -137,7 +138,7 @@ class Training:
             self._report_settings()
         # Prepare the data for training and validation
         ii = ImageImporter(
-            "infest", validation=True, sample=False, smaller=self.image_resolution
+            "infest", validation=True, sample=True, smaller=self.image_resolution
         )
         train, validation = ii.get_dataset()
         if self.verbose:
@@ -183,12 +184,20 @@ class Training:
         in_channels = 3
         model = SlimUNet(in_channels)
         model.to(self.device)
+        X, _ = next(iter(train_loader))
+        X = X.to(self.device)
 
-        # Report on flops/parameters of the model
-        # X, _ = next(iter(train_loader))
-        # X = X.to(self.device)
+        # Reporting from slimmable networks
+        for width in settings.WIDTHS:
+            # Report on flops/parameters of the model
+            print()
+            model.set_width(width)
+            model_profiling(model, X)
+            print()
+
+        # All other rando packages found online
         # self._report_model(model, X, train_loader)
-        # 0 / 0
+        0 / 0
 
         # Prepare the optimiser
         optimizer = Adam(
