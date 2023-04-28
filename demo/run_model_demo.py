@@ -1,10 +1,13 @@
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import torch
 from numpy import unique
 from sklearn.metrics import precision_score
+from torch import flatten
 from torch.utils.data import DataLoader
+from torchmetrics.classification import BinaryPrecision
 
 from andraz import settings
 from andraz.data.data import ImageImporter
@@ -12,6 +15,80 @@ from andraz.helpers.drive_fetch import setup_env
 from andraz.helpers.masking import get_binary_masks_infest
 
 CLASSES = ["back", "weeds", "lettuce"]
+
+
+def precision_original(test_loader, model):
+    scores = {x: [] for x in CLASSES}
+    precs = []
+    for X, y in test_loader:
+        X = X.to("cuda:0")
+        mask_pred = model.forward(X)
+
+        # Calculate precision for all classes and print them
+        # Iterate through classes
+        for j in range(y.shape[1]):
+            # If everything is predicted as negative
+            if len(unique(mask_pred[0][j].cpu())) == 1:
+                scores[CLASSES[j]].append(0)
+            else:
+                mask_pred = get_binary_masks_infest(mask_pred)
+                s = datetime.now()
+                result = precision_score(
+                    [int(xx) for x in y[0][j].cpu().numpy().tolist() for xx in x],
+                    [
+                        int(xx)
+                        for x in mask_pred[0][j].cpu().numpy().tolist()
+                        for xx in x
+                    ],
+                )
+                precs.append((datetime.now() - s).total_seconds())
+                scores[CLASSES[j]].append(result)
+    print("Prec time({}): {}".format(len(precs), sum(precs)))
+    return scores
+
+
+def precision_matmul(test_loader, model):
+    scores = {x: [] for x in CLASSES}
+    precs = []
+    for X, y in test_loader:
+        X = X.to("cuda:0")
+        mask_pred = model.forward(X)
+        mask_pred = get_binary_masks_infest(mask_pred)
+
+        # Calculate precision for all classes and print them
+        # Iterate through classes
+        for j in range(y.shape[1]):
+            true = flatten(y[:, j]).tolist()
+            pred = flatten(mask_pred[:, j]).tolist()
+            s = datetime.now()
+            scores[CLASSES[j]].append(precision_score(true, pred, zero_division=0))
+            precs.append((datetime.now() - s).total_seconds())
+
+    print("Prec time({}): {}".format(len(precs), sum(precs)))
+    return scores
+
+
+def precision_torchmetrics(test_loader, model):
+    scores = {x: [] for x in CLASSES}
+    precs = []
+    precision_calculation = BinaryPrecision(validate_args=False).to("cuda:0")
+    for X, y in test_loader:
+        X = X.to("cuda:0")
+        y = y.to("cuda:0")
+        mask_pred = model.forward(X)
+        mask_pred = get_binary_masks_infest(mask_pred)
+
+        # Calculate precision for all classes and print them
+        # Iterate through classes
+
+        for j in range(y.shape[1]):
+            s = datetime.now()
+            result = precision_calculation(y[:, j], mask_pred[:, j])
+            precs.append((datetime.now() - s).total_seconds())
+            result = float(result.cpu())
+            scores[CLASSES[j]].append(result)
+
+    return scores
 
 
 if __name__ == "__main__":
@@ -34,43 +111,15 @@ if __name__ == "__main__":
     # Load the dataset ("infest" -> labelled part of the dataset from Geo-K)
     ii = ImageImporter("infest", only_test=True)
     _, test = ii.get_dataset()
-    test_loader = DataLoader(test, batch_size=1, shuffle=False)
+    test_loader = DataLoader(test, batch_size=8, shuffle=False)
 
     model.eval()
     with torch.no_grad():
         # Iterate through different widths of the network
-        for width_mult in settings.WIDTHS:
+        for width_mult in settings.WIDTHS[-1:]:
             print("Evaluating for width: {}".format(width_mult))
             model.set_width(width_mult)
-            scores = {x: [] for x in CLASSES}
-
-            for X, y in test_loader:
-                X = X.to("cuda:0")
-                mask_pred = model.forward(X)
-
-                # Calculate precision for all classes and print them
-                # Iterate through classes
-                for j in range(y.shape[1]):
-                    # If everything is predicted as negative
-                    if len(unique(mask_pred[0][j].cpu())) == 1:
-                        scores[CLASSES[j]].append(0)
-                    else:
-                        mask_pred = get_binary_masks_infest(mask_pred)
-                        scores[CLASSES[j]].append(
-                            # For the binary precision evaluation to work, we need 1D array
-                            precision_score(
-                                [
-                                    int(xx)
-                                    for x in y[0][j].cpu().numpy().tolist()
-                                    for xx in x
-                                ],
-                                [
-                                    int(xx)
-                                    for x in mask_pred[0][j].cpu().numpy().tolist()
-                                    for xx in x
-                                ],
-                            )
-                        )
+            scores = precision_torchmetrics(test_loader, model)
             for key in scores:
                 print("{}: {}".format(key, round(np.mean(scores[key]), 3)))
             print()
