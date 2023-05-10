@@ -1,7 +1,10 @@
 import numpy as np
+import torch
+import wandb
 from numpy import unique
 from sklearn.metrics import precision_score
 from torchmetrics import JaccardIndex
+from torchmetrics.classification import BinaryPrecision
 
 from andraz import settings
 
@@ -12,14 +15,20 @@ class Metricise:
         self.metrics = None
         self.reset_metrics()
 
-    def _aggregate_metrics(self):
+    def _aggregate_metrics(self, epoch=-1):
+        remove_list = []
         for x in self.metrics:
             if x == "Image":
-                continue
+                if self.metrics[x]:
+                    self.metrics[x] = self.metrics[x]
+                else:
+                    remove_list.append(x)
             elif x == "learning rate":
                 self.metrics[x] = self.metrics[x][0]
             else:
                 self.metrics[x] = np.mean(self.metrics[x])
+        for x in remove_list:
+            self.metrics.pop(x)
 
     def reset_metrics(self):
         self.metrics = {x: [] for x in self.names}
@@ -35,16 +44,18 @@ class Metricise:
                     self._jaccard(y[i][j], y_pred[i][j])
                 )
 
-    def add_precision(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
+    def add_precision_old(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
         # Iterate through the batch of data
         for i in range(y.shape[0]):
             # Iterate through classes
             for j in range(y.shape[1]):
                 # If everything is predicted as negative
                 if len(unique(y_pred[i][j].cpu())) == 1:
-                    self.metrics["Precision/{}/{}".format(name, classes[j])].append(0)
+                    self.metrics["OldPrecision/{}/{}".format(name, classes[j])].append(
+                        0
+                    )
                 else:
-                    self.metrics["Precision/{}/{}".format(name, classes[j])].append(
+                    self.metrics["OldPrecision/{}/{}".format(name, classes[j])].append(
                         # For the binary precision evaluation to work, we need 1D array
                         precision_score(
                             [
@@ -60,8 +71,34 @@ class Metricise:
                         )
                     )
 
-    def add_image(self, image):
-        self.metrics["Image"].append(image)
+    def add_precision(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
+        precision_calculation = BinaryPrecision(validate_args=False).to("cuda:0")
+        for j in range(y.shape[1]):
+            result = float(precision_calculation(y[:, j], y_pred[:, j]).cpu())
+            self.metrics["Precision/{}/{}".format(name, classes[j])].append(result)
+
+    def add_image(self, X, y, y_pred, epoch):
+        y_mask = torch.argmax(y_pred, dim=1)
+        y_mask = y_mask + 1
+
+        table = wandb.Table(columns=["ID", "Epoch", "Image"])
+        for i in range(10):
+            original_image = X[i].cpu().permute(1, 2, 0)
+            mask_image = y_mask[i].cpu()
+
+            class_labels = {1: "Background", 3: "Lettuce", 2: "Weeds"}
+            image = wandb.Image(
+                original_image.numpy(),
+                masks={
+                    "predictions": {
+                        "mask_data": mask_image.numpy(),
+                        "class_labels": class_labels,
+                    }
+                },
+            )
+            table.add_data(i, epoch, image)
+
+        self.metrics["Image"] = table
 
     def add_learning_rate(self, learning_rate):
         self.metrics["learning_rate"].append(learning_rate)
@@ -72,7 +109,7 @@ class Metricise:
         return jaccard(y, y_pred).cpu()
 
     # Wandb handling
-    def report_wandb(self, wandb):
+    def report_wandb(self, wandb, epoch=-1):
         if settings.WANDB:
             self._aggregate_metrics()
             wandb.log(self.metrics)

@@ -87,7 +87,8 @@ def precision_torchmetrics(test_loader, model):
             precs.append((datetime.now() - s).total_seconds())
             result = float(result.cpu())
             scores[CLASSES[j]].append(result)
-
+    for key in scores:
+        scores[key] = round(np.mean(scores[key]), 3)
     return scores
 
 
@@ -98,28 +99,37 @@ if __name__ == "__main__":
 
     # Prepare the env -- download data and models (only needed on data/models update)
     # Comment the line when not needed
-    setup_env()
-
-    # Load the model
-    model = torch.load(
-        Path(settings.PROJECT_DIR)
-        / "training/garage/no_decay.pt"
-        # / "training/garage/linear.pt"
-        # / "training/garage/exponential.pt"
-    )
+    setup_env(data=False, models=True)
 
     # Load the dataset ("infest" -> labelled part of the dataset from Geo-K)
     ii = ImageImporter("infest", only_test=True)
     _, test = ii.get_dataset()
-    test_loader = DataLoader(test, batch_size=8, shuffle=False)
-
-    model.eval()
-    with torch.no_grad():
-        # Iterate through different widths of the network
-        for width_mult in settings.WIDTHS[-1:]:
-            print("Evaluating for width: {}".format(width_mult))
-            model.set_width(width_mult)
-            scores = precision_torchmetrics(test_loader, model)
-            for key in scores:
-                print("{}: {}".format(key, round(np.mean(scores[key]), 3)))
-            print()
+    test_loader = DataLoader(test, batch_size=1, shuffle=False)
+    for model_path in [
+        "training/garage/no_decay.pt",
+        "training/garage/linear.pt",
+        "training/garage/exponential.pt",
+        "training/garage/squeeze.pt",
+    ]:
+        print("Evaluating model {}".format(model_path))
+        results = {}
+        # Load the model
+        model = torch.load(Path(settings.PROJECT_DIR) / model_path)
+        model.eval()
+        with torch.no_grad():
+            # Iterate through different widths of the network
+            for width_mult in settings.WIDTHS:
+                model.set_width(width_mult)
+                scores = precision_torchmetrics(test_loader, model)
+                results[width_mult] = scores
+        print("{:<8} {:<8} {:<8} {:<8}".format("width", "back", "weeds", "lettuce"))
+        for key in results:
+            print(
+                "{:<8} {:<8} {:<8} {:<8}".format(
+                    key,
+                    results[key]["back"],
+                    results[key]["weeds"],
+                    results[key]["lettuce"],
+                )
+            )
+        print()

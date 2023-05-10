@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import wandb as wandb
 from fvcore.nn import FlopCountAnalysis, flop_count_table, parameter_count
+from numpy import mean
 from torch import tensor, argmax
 from torch.optim import Adam
 from torch.optim.lr_scheduler import LinearLR, ExponentialLR
@@ -13,12 +14,14 @@ from ptflops import get_model_complexity_info
 import thop
 import pthflops
 from plotly import graph_objects as go
+from torchsummary import summary
 
 import andraz.settings as settings
 from andraz.data.data import ImageImporter
 from andraz.helpers.masking import get_binary_masks_infest
 from andraz.helpers.metricise import Metricise
 from andraz.helpers.model_profiling import model_profiling
+from andraz.models.slim_squeeze_unet import SlimSqueezeUNet, SlimPrunedSqueezeUNet
 from andraz.models.slim_unet import SlimUNet
 
 
@@ -26,6 +29,7 @@ class Training:
     def __init__(
         self,
         device,
+        architecture=settings.MODEL,
         epochs=settings.EPOCHS,
         learning_rate=settings.LEARNING_RATE,
         learning_rate_scheduler=settings.LEARNING_RATE_SCHEDULER,
@@ -33,9 +37,11 @@ class Training:
         regularisation_l2=settings.REGULARISATION_L2,
         image_resolution=settings.IMAGE_RESOLUTION,
         widths=settings.WIDTHS,
+        dropout=settings.DROPOUT,
         verbose=1,
         wandb_group=None,
     ):
+        self.architecture = architecture
         self.device = device
         self.epochs = epochs
         self.learning_rate = learning_rate
@@ -44,18 +50,21 @@ class Training:
         self.regularisation_l2 = regularisation_l2
         self.image_resolution = image_resolution
         self.widths = widths
+        self.dropout = dropout
         self.verbose = verbose
         self.wandb_group = wandb_group
 
     def _report_settings(self):
         print("=======================================")
         print("Training with the following parameters:")
+        print("Model architecture: {}".format(self.architecture))
         print("Epochs: {}".format(self.epochs))
         print("Learning rate: {}".format(self.learning_rate))
         print("Learning rate scheduler: {}".format(self.learning_rate_scheduler))
         print("Batch size: {}".format(self.batch_size))
         print("L2 regularisation: {}".format(self.regularisation_l2))
         print("Image resolution: {}".format(self.image_resolution))
+        print("Dropout: {}".format(self.dropout))
         print("Network widths: {}".format(self.widths))
         print("=======================================")
 
@@ -94,7 +103,17 @@ class Training:
             # print(flop_count_table(flops))
         print("=======================================")
 
-    def _evaluate(self, metrics, loader, model, dataset_name, device, loss_function):
+    def _evaluate(
+        self,
+        metrics,
+        loader,
+        model,
+        dataset_name,
+        device,
+        loss_function,
+        image_pred=False,
+        epoch=0,
+    ):
         """
         Evaluate performance and add to metrics.
         """
@@ -113,7 +132,8 @@ class Training:
                 y_pred = get_binary_masks_infest(y_pred)
                 metrics.add_jaccard(y, y_pred, name)
                 metrics.add_precision(y, y_pred, name)
-
+                if image_pred:
+                    metrics.add_image(X, y, y_pred, epoch)
         return metrics
 
     def _learning_rate_scheduler(self, optimizer):
@@ -138,7 +158,7 @@ class Training:
             self._report_settings()
         # Prepare the data for training and validation
         ii = ImageImporter(
-            "infest", validation=True, sample=True, smaller=self.image_resolution
+            "infest", validation=True, sample=False, smaller=self.image_resolution
         )
         train, validation = ii.get_dataset()
         if self.verbose:
@@ -153,6 +173,7 @@ class Training:
                 entity="colosal",
                 group=self.wandb_group,
                 config={
+                    "Architecture": self.architecture,
                     "Batch Size": self.batch_size,
                     "Epochs": self.epochs,
                     "Learning Rate": self.learning_rate,
@@ -177,27 +198,33 @@ class Training:
             # For cofly
             # weight=tensor([0.16, 0.28, 0, 0.28, 0.28]).to(self.device)
             # For infest
-            weight=tensor([0.2, 0.4, 0.4]).to(self.device)
+            # weight=tensor([0.2, 0.4, 0.4]).to(self.device)
+            weight=tensor([0.1, 0.45, 0.45]).to(self.device)
         )
 
         # Prepare the model
         in_channels = 3
-        model = SlimUNet(in_channels)
+        if self.architecture == "slim":
+            model = SlimUNet(in_channels)
+        elif self.architecture == "squeeze":
+            # model = SlimSqueezeUNet(in_channels)
+            model = SlimPrunedSqueezeUNet(in_channels, dropout=self.dropout)
+        else:
+            raise ValueError("Unknown model architecture.")
+        summary(model, input_size=(in_channels, 128, 128))
         model.to(self.device)
-        X, _ = next(iter(train_loader))
-        X = X.to(self.device)
 
-        # Reporting from slimmable networks
-        for width in settings.WIDTHS:
-            # Report on flops/parameters of the model
-            print()
-            model.set_width(width)
-            model_profiling(model, X)
-            print()
-
+        # # Reporting from slimmable networks
+        # X, _ = next(iter(train_loader))
+        # X = X.to(self.device)
+        # for width in settings.WIDTHS[-1:]:
+        #     # Report on flops/parameters of the model
+        #     print()
+        #     model.set_width(width)
+        #     model_profiling(model, X)
+        #     print()
         # All other rando packages found online
         # self._report_model(model, X, train_loader)
-        0 / 0
 
         # Prepare the optimiser
         optimizer = Adam(
@@ -223,7 +250,7 @@ class Training:
                 for w in ["back", "weeds", "lettuce"]
             ]
             + ["learning_rate"]
-            # + ["Image"]
+            + ["Image"]
         )
         metrics = Metricise(m_names)
 
@@ -261,17 +288,23 @@ class Training:
                 metrics = self._evaluate(
                     metrics, train_loader, model, "train", self.device, loss_function
                 )
-
                 # Validation evaluation
                 metrics = self._evaluate(
-                    metrics, valid_loader, model, "valid", self.device, loss_function
+                    metrics,
+                    valid_loader,
+                    model,
+                    "valid",
+                    self.device,
+                    loss_function,
+                    image_pred=epoch % 50 == 0,
+                    epoch=epoch,
                 )
 
             metrics.report_wandb(wandb)
             torch.save(
                 model, garage_path + "slim_model_{}.pt".format(str(epoch).zfill(4))
             )
-            if self.verbose:
+            if self.verbose and epoch % 10 == 0:
                 print(
                     "Epoch {} completed. Running time: {}".format(
                         epoch, datetime.now() - s

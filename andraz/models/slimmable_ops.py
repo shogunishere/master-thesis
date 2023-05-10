@@ -11,7 +11,7 @@ class SwitchableBatchNorm2d(nn.Module):
         self.num_features = max(num_features_list)
         bns = []
         for i in num_features_list:
-            bns.append(nn.BatchNorm2d(i))
+            bns.append(nn.BatchNorm2d(i).to("cuda:0"))
         self.bn = nn.ModuleList(bns)
         self.width_mult = max(settings.WIDTHS)
         self.ignore_model_profiling = True
@@ -61,8 +61,66 @@ class SlimmableConv2d(nn.Conv2d):
             bias = self.bias[: self.out_channels]
         else:
             bias = self.bias
+        weight = weight.to("cuda:0")
+        bias = bias.to("cuda:0")
         y = nn.functional.conv2d(
             input, weight, bias, self.stride, self.padding, self.dilation, self.groups
+        )
+        return y
+
+
+class SlimmableConvTranspose2d(nn.ConvTranspose2d):
+    def __init__(
+        self,
+        in_channels_list,
+        out_channels_list,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups_list=[1],
+        bias=True,
+        output_padding=0,
+    ):
+        super(SlimmableConvTranspose2d, self).__init__(
+            max(in_channels_list),
+            max(out_channels_list),
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=max(groups_list),
+            bias=bias,
+            output_padding=output_padding,
+        )
+        self.in_channels_list = in_channels_list
+        self.out_channels_list = out_channels_list
+        self.groups_list = groups_list
+        if self.groups_list == [1]:
+            self.groups_list = [1 for _ in range(len(in_channels_list))]
+        self.width_mult = max(settings.WIDTHS)
+
+    def forward(self, input):
+        idx = settings.WIDTHS.index(self.width_mult)
+        self.in_channels = self.in_channels_list[idx]
+        self.out_channels = self.out_channels_list[idx]
+        self.groups = self.groups_list[idx]
+        weight = self.weight[: self.in_channels, : self.out_channels, :, :]
+        if self.bias is not None:
+            bias = self.bias[: self.out_channels]
+        else:
+            bias = self.bias
+        weight = weight.to("cuda:0")
+        bias = bias.to("cuda:0")
+        y = nn.functional.conv_transpose2d(
+            input,
+            weight,
+            bias=bias,
+            stride=self.stride,
+            padding=self.padding,
+            dilation=self.dilation,
+            groups=self.groups,
+            output_padding=self.output_padding,
         )
         return y
 

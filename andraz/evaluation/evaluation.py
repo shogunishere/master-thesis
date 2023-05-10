@@ -99,17 +99,29 @@ class EvaluationHelper:
         jaccard = MulticlassJaccardIndex(class_num).to(self.device)
         return jaccard(y, pred).cpu()
 
-    def _save_images(self, X, y, pred, batch, width, first):
-        for i, (x, test, y) in enumerate(zip(X, y, pred)):
+    def save_images(self, X, y, y_pred, batch, width):
+        for i, (x, test, y) in enumerate(zip(X, y, y_pred)):
             # Generate an original rgb image with predicted mask overlay.
             x_mask = torch.tensor(
                 torch.mul(x.clone().detach().cpu(), 255), dtype=torch.uint8
             )
             # To draw predictions
-            # mask = argmax(y.clone().detach(), dim=0)
-            # weed_mask = torch.where(mask == 1, True, False)[None, :, :]
-            # lettuce_mask = torch.where(mask == 2, True, False)[None, :, :]
-            # mask = cat((weed_mask, lettuce_mask), 0)
+            mask = argmax(y.clone().detach(), dim=0)
+            weed_mask = torch.where(mask == 1, True, False)[None, :, :]
+            lettuce_mask = torch.where(mask == 2, True, False)[None, :, :]
+            mask = cat((weed_mask, lettuce_mask), 0)
+
+            image = draw_segmentation_masks(
+                x_mask, mask, colors=["red", "green"], alpha=0.5
+            )
+            plt.imshow(image.permute(1, 2, 0))
+            # For saving predictions
+            plt.savefig(
+                "plots/infest/slim_unet/{}_{}_prediction.png".format(
+                    str(batch).zfill(3), width
+                )
+            )
+
             # To draw labels
             mask = test.clone().detach()[1:]
             weed_mask = torch.where(mask[0] == 1, True, False)[None, :, :]
@@ -129,14 +141,13 @@ class EvaluationHelper:
             )
             plt.imshow(image.permute(1, 2, 0))
             # plt.show()
-            # For saving predictions
-            # plt.savefig(
-            #     "plots/infest/slim_unet/{}_{}_{}_groundtruth.png".format(
-            #         batch, i, width
-            #     )
-            # )
+
             # For saving ground truth
-            plt.savefig("plots/infest/slim_unet/{}_{}_groundtruth.png".format(batch, i))
+            plt.savefig(
+                "plots/infest/slim_unet/{}_000_groundtruth.png".format(
+                    str(batch).zfill(3)
+                )
+            )
 
             # x = x.cpu().float().permute(1, 2, 0)
             # test = argmax(test, dim=0).float()
@@ -151,7 +162,7 @@ class EvaluationHelper:
             # plt.savefig("plots/{}_{}_pred.png".format(batch, i))
 
     @staticmethod
-    def _report_memory():
+    def report_memory():
         t = torch.cuda.get_device_properties(0).total_memory
         r = torch.cuda.memory_reserved(0)
         a = torch.cuda.memory_allocated(0)
@@ -162,18 +173,24 @@ class EvaluationHelper:
 
 
 if __name__ == "__main__":
-    dataset = ImageImporter("infest", validation=True, sample=True, smaller=(10, 10))
-    metrics = Metricise(["True Positive"])
-    model = torch.load("../training/garage/infest/0150 sandy firefly/slim_model.pt")
+    dataset = ImageImporter("infest", only_test=True, smaller=(128, 128))
+    eh = EvaluationHelper()
+    model = torch.load("../training/garage/squeeze.pt")
 
-    train, validation = dataset.get_dataset()
+    _, test = dataset.get_dataset()
+    batch = 0
+    for X, y in test:
+        # Add batch dimension
+        X = X[None, :]
+        y = y[None, :]
+        X = X.to("cuda:0")
+        y = y.to("cuda:0")
 
-    X, y = next(iter(train))
-
-    X = X[None, :]
-    y = y[None, :]
-
-    metrics.add_tp(y, y, "train")
+        for width in settings.WIDTHS:
+            model.set_width(width)
+            y_pred = model(X)
+            eh.save_images(X, y, y_pred, batch, str(int(width * 100)).zfill(3))
+        batch += 1
 
     # Generate images
     # device = "cuda:0"
@@ -187,57 +204,3 @@ if __name__ == "__main__":
     # device = "cuda:0"
     # eh = EvaluationHelper(device=device, dataset="infest", class_num=3, visualise=True)
     # eh.import_data()
-
-    # steps = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
-    # jaccards = {x: [] for x in settings.width_mult_list}
-    # times = {x: [] for x in settings.width_mult_list}
-    # jac_std = {x: [] for x in settings.width_mult_list}
-    # tim_std = {x: [] for x in settings.width_mult_list}
-    # for step in steps:
-    #     model = "garage/infest/slim_model_{}.pt".format(step)
-    #
-    #     jac_scores, run_times = eh.evaluate(model)
-    #     break
-    # for x in settings.width_mult_list:
-    #     jaccards[x].append(np.mean(jac_scores[x]))
-    #     times[x].append(np.mean(run_times[x]))
-    #     jac_std[x].append(np.std(jac_scores[x]))
-    #     tim_std[x].append(np.std(run_times[x]))
-
-    # jac_data = []
-    # tim_data = []
-    # for x in settings.width_mult_list:
-    #     jac_data.append(
-    #         go.Bar(
-    #             x=steps,
-    #             y=jaccards[x],
-    #             name=str(x),
-    #             error_y={"array": jac_std[x], "visible": True},
-    #         )
-    #     )
-    #     tim_data.append(
-    #         go.Bar(
-    #             x=steps,
-    #             y=times[x],
-    #             name=str(x),
-    #             error_y={"array": tim_std[x], "visible": True},
-    #         )
-    #     )
-    # fig = go.Figure(data=jac_data)
-    # fig.update_layout(
-    #     {
-    #         "title": "Jaccard index for different time steps and network widths",
-    #         "xaxis_title": "Epoch",
-    #         "yaxis_title": "Jaccard Index",
-    #     }
-    # )
-    # fig.show()
-    # fig = go.Figure(data=tim_data)
-    # fig.update_layout(
-    #     {
-    #         "title": "Inference times for different time steps and network widths",
-    #         "xaxis_title": "Epoch",
-    #         "yaxis_title": "Inference time",
-    #     }
-    # )
-    # fig.show()
