@@ -294,3 +294,8 @@ andraz/training/wandb/
 andraz/training/garage/
 andraz/evaluation/plots/
 # End of Andraz custom entries
+
+# Demo custom entries
+demo/groundtruth.png
+demo/prediction.png
+# End of Demo custom entries
