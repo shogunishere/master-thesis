@@ -298,4 +298,6 @@ andraz/evaluation/plots/
 # Demo custom entries
 demo/groundtruth.png
 demo/prediction.png
+demo/groundtruth.jpg
+demo/prediction.jpg
 # End of Demo custom entries

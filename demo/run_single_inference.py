@@ -18,7 +18,7 @@ def get_random_image_path(project_path, fixed=-1):
         / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/test/images/"
     )
     if fixed < 0:
-        return images[randint(0, len(images))]
+        return images[randint(0, len(images) - 1)]
     else:
         return images[fixed if fixed < len(images) else len(images) - 1]
 
@@ -50,9 +50,9 @@ def _yolov7_label(label, image_width, image_height):
     return int(class_id + 1), pixels
 
 
-def get_single_image():
+def get_single_image(fixed=-1):
     project_path = Path(settings.PROJECT_DIR)
-    file_name = get_random_image_path(project_path)
+    file_name = get_random_image_path(project_path, fixed=fixed)
     img = Image.open(
         project_path
         / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/test/images/"
@@ -68,7 +68,7 @@ def get_single_image():
     image_height = img.shape[2]
 
     # Constructing the segmentation mask
-    # We init the whole tensor as background
+    # We init the whole tensor as the background
     mask = torch.cat(
         (
             torch.ones(1, image_width, image_height),
@@ -112,7 +112,7 @@ def save_images(X, y, y_pred):
 
     image = draw_segmentation_masks(x_mask, mask, colors=["red", "green"], alpha=0.5)
     plt.imshow(image.permute(1, 2, 0))
-    plt.savefig("prediction.png")
+    plt.savefig("prediction.jpg")
 
     # Draw ground truth
     mask = y.clone().detach()[0]
@@ -121,7 +121,7 @@ def save_images(X, y, y_pred):
     mask = torch.cat((weed_mask, lettuce_mask), 0)
     image = draw_segmentation_masks(x_mask, mask, colors=["red", "green"], alpha=0.5)
     plt.imshow(image.permute(1, 2, 0))
-    plt.savefig("groundtruth.png")
+    plt.savefig("groundtruth.jpg")
 
 
 if __name__ == "__main__":
