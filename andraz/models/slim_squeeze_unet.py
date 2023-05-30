@@ -15,7 +15,7 @@ channels = [[3, 3, 3, 3]]
 
 
 class SlimSqueezeUNet(nn.Module):
-    def __init__(self, out_channels, device="cuda:0"):
+    def __init__(self, out_channels, device="cuda:0", dropout=settings.DROPOUT):
         super(SlimSqueezeUNet, self).__init__()
         self.device = device
 
@@ -40,6 +40,11 @@ class SlimSqueezeUNet(nn.Module):
         self.fire08 = FireModule(
             [64, 128, 256, 512], [8, 16, 32, 64], [32, 64, 128, 256]
         )
+
+        if dropout:
+            self.dropout = Dropout(dropout)
+        else:
+            self.dropout = None
 
         self.conv2 = SlimmableConvTranspose2d(
             [64, 128, 256, 512],
@@ -136,6 +141,9 @@ class SlimSqueezeUNet(nn.Module):
         x11 = self.fire07(x10)
         x12 = self.fire08(x11)
 
+        if self.dropout:
+            x12 = self.dropout(x12)
+
         a01 = self.conv2(x12)
         y01 = torch.cat((a01, x10), dim=1)
         y02 = self.fire09(y01)
@@ -186,9 +194,9 @@ class SlimPrunedSqueezeUNet(nn.Module):
         )
         self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=4, padding=1)
 
-        # self.fire01 = FireModule([8, 16, 32, 64], [2, 4, 8, 16], [8, 16, 32, 64])
-        # self.fire02 = FireModule([16, 32, 64, 128], [2, 4, 8, 16], [8, 16, 32, 64])
-        # self.maxpool2 = nn.MaxPool2d(kernel_size=kernel_size, stride=2, padding=1)
+        self.fire01 = FireModule([8, 16, 32, 64], [2, 4, 8, 16], [8, 16, 32, 64])
+        self.fire02 = FireModule([16, 32, 64, 128], [2, 4, 8, 16], [8, 16, 32, 64])
+        self.maxpool2 = nn.MaxPool2d(kernel_size=kernel_size, stride=2, padding=1)
 
         self.fire03 = FireModule([16, 32, 64, 128], [4, 8, 16, 32], [16, 32, 64, 128])
         self.fire04 = FireModule([32, 64, 128, 256], [4, 8, 16, 32], [16, 32, 64, 128])
@@ -228,16 +236,16 @@ class SlimPrunedSqueezeUNet(nn.Module):
         )
         self.fire10 = FireModule([48, 96, 192, 384], [4, 8, 16, 32], [8, 16, 32, 64])
 
-        # self.conv4 = SlimmableConvTranspose2d(
-        #     [32, 64, 128, 256],
-        #     [8, 16, 32, 64],
-        #     kernel_size=kernel_size,
-        #     dilation=1,
-        #     padding=1,
-        #     stride=2,
-        #     output_padding=1,
-        # )
-        # self.fire11 = FireModule([24, 48, 96, 192], [2, 4, 8, 16], [8, 16, 32, 64])
+        self.conv4 = SlimmableConvTranspose2d(
+            [32, 64, 128, 256],
+            [8, 16, 32, 64],
+            kernel_size=kernel_size,
+            dilation=1,
+            padding=1,
+            stride=2,
+            output_padding=1,
+        )
+        self.fire11 = FireModule([24, 48, 96, 192], [2, 4, 8, 16], [8, 16, 32, 64])
 
         self.conv5 = SlimmableConvTranspose2d(
             [16, 32, 64, 128],
@@ -264,9 +272,9 @@ class SlimPrunedSqueezeUNet(nn.Module):
         self.layers = [
             self.conv1,
             self.maxpool1,
-            # self.fire01,
-            # self.fire02,
-            # self.maxpool2,
+            self.fire01,
+            self.fire02,
+            self.maxpool2,
             self.fire03,
             self.fire04,
             self.maxpool3,
@@ -278,8 +286,8 @@ class SlimPrunedSqueezeUNet(nn.Module):
             self.fire09,
             self.conv3,
             self.fire10,
-            # self.conv4,
-            # self.fire11,
+            self.conv4,
+            self.fire11,
             self.conv5,
             self.fire12,
             self.conv6,
@@ -290,11 +298,11 @@ class SlimPrunedSqueezeUNet(nn.Module):
         x01 = self.conv1(X)
         x02 = self.maxpool1(x01)
 
-        # x03 = self.fire01(x02)
-        # x04 = self.fire02(x03)
-        # x05 = self.maxpool2(x04)
+        x03 = self.fire01(x02)
+        x04 = self.fire02(x03)
+        x05 = self.maxpool2(x04)
 
-        x06 = self.fire03(x02)
+        x06 = self.fire03(x05)
         x07 = self.fire04(x06)
         x08 = self.maxpool3(x07)
 
@@ -314,11 +322,11 @@ class SlimPrunedSqueezeUNet(nn.Module):
         y03 = torch.cat((a02, x08), dim=1)
         y04 = self.fire10(y03)
 
-        # a03 = self.conv4(y04)
-        # y05 = torch.cat((a03, x05), dim=1)
-        # y06 = self.fire11(y05)
+        a03 = self.conv4(y04)
+        y05 = torch.cat((a03, x05), dim=1)
+        y06 = self.fire11(y05)
 
-        a04 = self.conv5(y04)
+        a04 = self.conv5(y06)
         y07 = torch.cat((a04, x02), dim=1)
         y08 = self.fire12(y07)
 

@@ -40,6 +40,7 @@ class Training:
         dropout=settings.DROPOUT,
         verbose=1,
         wandb_group=None,
+        dataset="infest",
     ):
         self.architecture = architecture
         self.device = device
@@ -53,6 +54,7 @@ class Training:
         self.dropout = dropout
         self.verbose = verbose
         self.wandb_group = wandb_group
+        self.dataset = dataset
 
     def _report_settings(self):
         print("=======================================")
@@ -129,10 +131,11 @@ class Training:
                     name,
                 )
 
+                # This also works for cofly as lettuce rows just stay empty
                 y_pred = get_binary_masks_infest(y_pred)
                 metrics.add_jaccard(y, y_pred, name)
                 metrics.add_precision(y, y_pred, name)
-                if image_pred:
+                if width == self.widths[-1] and image_pred:
                     metrics.add_image(X, y, y_pred, epoch)
         return metrics
 
@@ -158,7 +161,7 @@ class Training:
             self._report_settings()
         # Prepare the data for training and validation
         ii = ImageImporter(
-            "infest", validation=True, sample=False, smaller=self.image_resolution
+            self.dataset, validation=False, sample=False, smaller=self.image_resolution
         )
         train, validation = ii.get_dataset()
         if self.verbose:
@@ -182,6 +185,7 @@ class Training:
                     "Image Resolution": self.image_resolution,
                     "Train Samples": len(train),
                     "Validation Samples": len(validation),
+                    "Dropout": settings.DROPOUT,
                 },
             )
             wname = run.name.split("-")
@@ -196,22 +200,22 @@ class Training:
         # Prepare a weighted loss function
         loss_function = torch.nn.CrossEntropyLoss(
             # For cofly
-            # weight=tensor([0.16, 0.28, 0, 0.28, 0.28]).to(self.device)
+            weight=tensor([0.2, 0.8]).to(self.device)
             # For infest
             # weight=tensor([0.2, 0.4, 0.4]).to(self.device)
-            weight=tensor([0.1, 0.45, 0.45]).to(self.device)
+            # weight=tensor([0.1, 0.45, 0.45]).to(self.device)
         )
 
         # Prepare the model
-        in_channels = 3
+        out_channels = 2
         if self.architecture == "slim":
-            model = SlimUNet(in_channels)
+            model = SlimUNet(out_channels)
         elif self.architecture == "squeeze":
-            # model = SlimSqueezeUNet(in_channels)
-            model = SlimPrunedSqueezeUNet(in_channels, dropout=self.dropout)
+            model = SlimSqueezeUNet(out_channels)
+            # model = SlimPrunedSqueezeUNet(in_channels, dropout=self.dropout)
         else:
             raise ValueError("Unknown model architecture.")
-        summary(model, input_size=(in_channels, 128, 128))
+        # summary(model, input_size=(in_channels, 128, 128))
         model.to(self.device)
 
         # # Reporting from slimmable networks
@@ -323,5 +327,6 @@ if __name__ == "__main__":
     else:
         device = "cpu"
 
-    tr = Training(device)
+    tr = Training(device, dataset="cofly")
+    # tr = Training(device, dataset="infest")
     tr.train()

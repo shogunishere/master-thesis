@@ -15,7 +15,7 @@ class Metricise:
         self.metrics = None
         self.reset_metrics()
 
-    def _aggregate_metrics(self, epoch=-1):
+    def _aggregate_metrics(self):
         remove_list = []
         for x in self.metrics:
             if x == "Image":
@@ -78,25 +78,37 @@ class Metricise:
             self.metrics["Precision/{}/{}".format(name, classes[j])].append(result)
 
     def add_image(self, X, y, y_pred, epoch):
-        y_mask = torch.argmax(y_pred, dim=1)
-        y_mask = y_mask + 1
+        y = torch.argmax(y, dim=1)
+        y = y + 1
+
+        y_pred = torch.argmax(y_pred, dim=1)
+        y_pred = y_pred + 1
 
         table = wandb.Table(columns=["ID", "Epoch", "Image"])
+        class_labels = {1: "Background", 2: "Weeds", 3: "Lettuce"}
         for i in range(10):
-            original_image = X[i].cpu().permute(1, 2, 0)
-            mask_image = y_mask[i].cpu()
+            try:
+                original_image = X[i].cpu().permute(1, 2, 0)
 
-            class_labels = {1: "Background", 3: "Lettuce", 2: "Weeds"}
-            image = wandb.Image(
-                original_image.numpy(),
-                masks={
-                    "predictions": {
-                        "mask_data": mask_image.numpy(),
-                        "class_labels": class_labels,
-                    }
-                },
-            )
-            table.add_data(i, epoch, image)
+                mask_org = y[i].cpu()
+                mask_pred = y_pred[i].cpu()
+                masks = wandb.Image(
+                    original_image.numpy(),
+                    masks={
+                        "labels": {
+                            "mask_data": mask_org.numpy(),
+                            "class_labels": class_labels,
+                        },
+                        "predictions": {
+                            "mask_data": mask_pred.numpy(),
+                            "class_labels": class_labels,
+                        },
+                    },
+                )
+
+                table.add_data(i, epoch, masks)
+            except IndexError:
+                pass
 
         self.metrics["Image"] = table
 

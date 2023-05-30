@@ -82,44 +82,46 @@ class ImageImporter:
         """
         images = sorted(os.listdir(self.project_path / "data/cofly/images/images/"))
         create_tensor = transforms.ToTensor()
-
-        # If you want to do any other transformations
-        smaller = transforms.Resize((128, 128))
+        if self.smaller:
+            smaller = transforms.Resize(self.smaller)
 
         X, y = [], []
+
         for file_name in images:
-            X.append(
-                create_tensor(
-                    Image.open(
-                        self.project_path / "data/cofly/images/images/" / file_name
-                    )
-                )
+
+            img = create_tensor(
+                Image.open(self.project_path / "data/cofly/images/images/" / file_name)
             )
-            # A story behind the beauty below:
-            # As Torch is kinda shady about how to one hot encode segmentation masks, we made our own.
-            # We first open the image with PIL, convert it to numpy array, then to Torch tensor,
-            # then cast it to long (required for one-hot encoding), then perform one hot encoding,
-            # then permuting the dimensions to fit the shape expected by torch while training, then
-            # cast everything to float, so it works with our model.
-            y.append(
+            if self.smaller:
+                img = smaller(img)
+            X.append(img)
+
+            # Open the mask
+            mask = Image.open(
+                self.project_path / "data/cofly/labels/labels/" / file_name
+            )
+            if self.smaller:
+                mask = smaller(mask)
+            mask = tensor(np.array(mask))
+            # Merge weeds classes to a single weeds class
+            mask = torch.where(
+                mask > 0,
+                1,
+                0,
+            )
+            mask = (
                 torch.nn.functional.one_hot(
-                    tensor(
-                        np.array(
-                            Image.open(
-                                self.project_path
-                                / "data/cofly/labels/labels/"
-                                / file_name
-                            )
-                        )
-                    ).long(),
-                    num_classes=5,
+                    mask,
+                    num_classes=2,
                 )
                 .permute(2, 0, 1)
                 .float()
             )
+            y.append(mask)
+
         return random_split(
             ImageDataset(X, y),
-            [0.75, 0.25],
+            [0.8, 0.2],
             generator=Generator().manual_seed(settings.SEED),
         )
 
