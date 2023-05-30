@@ -28,8 +28,12 @@ def setup_env(data=True, models=True):
         #     "https://drive.google.com/file/d/1252exvJsH_ljJafm7qbQzXld3S1rxmuY/view?usp=sharing",
         #     project_dir / "training/garage/",
         # )
+        # setup_folder(
+        #     "https://drive.google.com/file/d/1RFT-lvGjsLyJXNnJic8bw_OMmDqrycno/view?usp=sharing",
+        #     project_dir / "training/garage/",
+        # )
         setup_folder(
-            "https://drive.google.com/file/d/1RFT-lvGjsLyJXNnJic8bw_OMmDqrycno/view?usp=sharing",
+            "https://drive.google.com/file/d/1sfQ-rpP8EZnBLLbKF6hIBDyfAxcga-Dw/view?usp=sharing",
             project_dir / "training/garage/",
         )
 

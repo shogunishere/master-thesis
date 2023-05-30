@@ -15,7 +15,7 @@ channels = [[3, 3, 3, 3]]
 
 
 class SlimSqueezeUNet(nn.Module):
-    def __init__(self, out_channels, device="cuda:0", dropout=settings.DROPOUT):
+    def __init__(self, out_channels, device="cuda:0"):
         super(SlimSqueezeUNet, self).__init__()
         self.device = device
 
@@ -41,10 +41,10 @@ class SlimSqueezeUNet(nn.Module):
             [64, 128, 256, 512], [8, 16, 32, 64], [32, 64, 128, 256]
         )
 
-        if dropout:
-            self.dropout = Dropout(dropout)
-        else:
-            self.dropout = None
+        # if dropout:
+        #     self.dropout = Dropout(dropout)
+        # else:
+        #     self.dropout = None
 
         self.conv2 = SlimmableConvTranspose2d(
             [64, 128, 256, 512],
@@ -141,8 +141,8 @@ class SlimSqueezeUNet(nn.Module):
         x11 = self.fire07(x10)
         x12 = self.fire08(x11)
 
-        if self.dropout:
-            x12 = self.dropout(x12)
+        # if self.dropout:
+        #     x12 = self.dropout(x12)
 
         a01 = self.conv2(x12)
         y01 = torch.cat((a01, x10), dim=1)

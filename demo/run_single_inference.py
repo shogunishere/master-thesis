@@ -126,7 +126,7 @@ def save_images(X, y, y_pred):
 
 if __name__ == "__main__":
     # Load model and set width
-    model = torch.load(Path(settings.PROJECT_DIR) / "training/garage/squeeze.pt")
+    model = torch.load(Path(settings.PROJECT_DIR) / "training/garage/big_squeeze.pt")
     model.set_width(settings.WIDTHS[3])
 
     # Get a random single image from test dataset.
