@@ -79,10 +79,6 @@ class Inference:
 
 
 if __name__ == "__main__":
-    # Prepare the env -- download data and models (only needed on data/models update)
-    # Comment the line when not needed
-    setup_env(data=False, models=True)
-
     # Select one of the new models below
     # infer = Inference("cofly_slim.pt")
     infer = Inference("cofly_squeeze.pt")
