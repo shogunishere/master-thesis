@@ -21,7 +21,11 @@ from andraz.data.data import ImageImporter
 from andraz.helpers.masking import get_binary_masks_infest
 from andraz.helpers.metricise import Metricise
 from andraz.helpers.model_profiling import model_profiling
-from andraz.models.slim_squeeze_unet import SlimSqueezeUNet, SlimPrunedSqueezeUNet
+from andraz.models.slim_squeeze_unet import (
+    SlimSqueezeUNet,
+    SlimPrunedSqueezeUNet,
+    SlimSqueezeUNetCofly,
+)
 from andraz.models.slim_unet import SlimUNet
 
 
@@ -59,6 +63,7 @@ class Training:
     def _report_settings(self):
         print("=======================================")
         print("Training with the following parameters:")
+        print("Dataset: {}".format(self.dataset))
         print("Model architecture: {}".format(self.architecture))
         print("Epochs: {}".format(self.epochs))
         print("Learning rate: {}".format(self.learning_rate))
@@ -68,6 +73,7 @@ class Training:
         print("Image resolution: {}".format(self.image_resolution))
         print("Dropout: {}".format(self.dropout))
         print("Network widths: {}".format(self.widths))
+        print("Loss function weights: {}".format(settings.LOSS_WEIGHTS))
         print("=======================================")
 
     def _report_model(self, model, input, loader):
@@ -186,6 +192,8 @@ class Training:
                     "Train Samples": len(train),
                     "Validation Samples": len(validation),
                     "Dropout": settings.DROPOUT,
+                    "Dataset": self.dataset,
+                    "Loss Function Weights": settings.LOSS_WEIGHTS,
                 },
             )
             wname = run.name.split("-")
@@ -199,19 +207,17 @@ class Training:
 
         # Prepare a weighted loss function
         loss_function = torch.nn.CrossEntropyLoss(
-            # For cofly
-            weight=tensor([0.2, 0.8]).to(self.device)
-            # For infest
-            # weight=tensor([0.2, 0.4, 0.4]).to(self.device)
-            # weight=tensor([0.1, 0.45, 0.45]).to(self.device)
+            weight=tensor(settings.LOSS_WEIGHTS).to(self.device)
         )
 
         # Prepare the model
-        out_channels = 2
+        out_channels = len(settings.LOSS_WEIGHTS)
         if self.architecture == "slim":
             model = SlimUNet(out_channels)
         elif self.architecture == "squeeze":
             model = SlimSqueezeUNet(out_channels)
+            if self.dataset == "cofly":
+                model = SlimSqueezeUNetCofly(out_channels)
             # model = SlimPrunedSqueezeUNet(in_channels, dropout=self.dropout)
         else:
             raise ValueError("Unknown model architecture.")
@@ -311,7 +317,7 @@ class Training:
             if self.verbose and epoch % 10 == 0:
                 print(
                     "Epoch {} completed. Running time: {}".format(
-                        epoch, datetime.now() - s
+                        epoch + 1, datetime.now() - s
                     )
                 )
 
@@ -322,10 +328,7 @@ class Training:
 
 if __name__ == "__main__":
     # Train on GPU if available
-    if torch.cuda.is_available():
-        device = "cuda:0"
-    else:
-        device = "cpu"
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     tr = Training(device, dataset="cofly")
     # tr = Training(device, dataset="infest")

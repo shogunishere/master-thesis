@@ -1,4 +1,5 @@
 import os
+import random
 from pathlib import Path
 
 import numpy as np
@@ -28,7 +29,13 @@ class ImageDataset(Dataset):
 
 class ImageImporter:
     def __init__(
-        self, dataset, sample=False, validation=False, smaller=False, only_test=False
+        self,
+        dataset,
+        sample=False,
+        validation=False,
+        smaller=False,
+        only_test=False,
+        augmentations=None,
     ):
         assert dataset in ["agriadapt", "cofly", "infest"]
         self._dataset = dataset
@@ -81,6 +88,15 @@ class ImageImporter:
         Import images and their belonging segmentation masks (one-hot encoded).
         """
         images = sorted(os.listdir(self.project_path / "data/cofly/images/images/"))
+        random.seed(42069)
+        idx = [x for x in range(len(images))]
+        random.shuffle(idx)
+        cut = int(len(images) * 0.8)
+        train_images = [images[x] for x in idx[:cut]]
+        test_images = [images[x] for x in idx[cut:]]
+        return self._get_cofly_train(train_images), self._get_cofly_test(test_images)
+
+    def _get_cofly_train(self, images):
         create_tensor = transforms.ToTensor()
         if self.smaller:
             smaller = transforms.Resize(self.smaller)
@@ -88,12 +104,58 @@ class ImageImporter:
         X, y = [], []
 
         for file_name in images:
-
             img = create_tensor(
                 Image.open(self.project_path / "data/cofly/images/images/" / file_name)
             )
             if self.smaller:
                 img = smaller(img)
+
+            imgh = transforms.RandomHorizontalFlip(p=1)(img)
+            imgv = transforms.RandomVerticalFlip(p=1)(img)
+            imghv = transforms.RandomVerticalFlip(p=1)(imgh)
+            X.append(img)
+            X.append(imgh)
+            X.append(imgv)
+            X.append(imghv)
+
+            # Open the mask
+            mask = Image.open(
+                self.project_path / "data/cofly/labels/labels/" / file_name
+            )
+            if self.smaller:
+                mask = smaller(mask)
+            mask = tensor(np.array(mask))
+            # Merge weeds classes to a single weeds class
+            mask = torch.where(
+                mask > 0,
+                1,
+                0,
+            )
+
+            maskh = transforms.RandomHorizontalFlip(p=1)(mask)
+            maskv = transforms.RandomVerticalFlip(p=1)(mask)
+            maskhv = transforms.RandomVerticalFlip(p=1)(maskh)
+            y.append(self._cofly_prep_mask(mask))
+            y.append(self._cofly_prep_mask(maskh))
+            y.append(self._cofly_prep_mask(maskv))
+            y.append(self._cofly_prep_mask(maskhv))
+
+        return ImageDataset(X, y)
+
+    def _get_cofly_test(self, images):
+        create_tensor = transforms.ToTensor()
+        if self.smaller:
+            smaller = transforms.Resize(self.smaller)
+
+        X, y = [], []
+
+        for file_name in images:
+            img = create_tensor(
+                Image.open(self.project_path / "data/cofly/images/images/" / file_name)
+            )
+            if self.smaller:
+                img = smaller(img)
+
             X.append(img)
 
             # Open the mask
@@ -109,20 +171,18 @@ class ImageImporter:
                 1,
                 0,
             )
-            mask = (
-                torch.nn.functional.one_hot(
-                    mask,
-                    num_classes=2,
-                )
-                .permute(2, 0, 1)
-                .float()
-            )
-            y.append(mask)
+            y.append(self._cofly_prep_mask(mask))
 
-        return random_split(
-            ImageDataset(X, y),
-            [0.8, 0.2],
-            generator=Generator().manual_seed(settings.SEED),
+        return ImageDataset(X, y)
+
+    def _cofly_prep_mask(self, mask):
+        return (
+            torch.nn.functional.one_hot(
+                mask,
+                num_classes=2,
+            )
+            .permute(2, 0, 1)
+            .float()
         )
 
     def _get_infest(self):
@@ -240,16 +300,17 @@ class ImageImporter:
 
 
 if __name__ == "__main__":
-    ii = ImageImporter("infest")
+    ii = ImageImporter("cofly")
     train, test = ii.get_dataset()
-    for X, y in train:
-        x_mask = torch.tensor(torch.mul(X, 255), dtype=torch.uint8)
-        mask = torch.tensor(y[1:], dtype=torch.bool)
-        image = draw_segmentation_masks(
-            x_mask, mask, colors=["yellow", "green"], alpha=0.5
-        )
-        plt.imshow(image.permute(1, 2, 0))
-        plt.show()
+    print(len(train))
+    print(len(test))
+
+    X, y = next(iter(train))
+    x_mask = torch.tensor(torch.mul(X, 255), dtype=torch.uint8)
+    mask = torch.tensor(y[1:], dtype=torch.bool)
+    image = draw_segmentation_masks(x_mask, mask, colors=["yellow", "green"], alpha=0.5)
+    plt.imshow(image.permute(1, 2, 0))
+    plt.show()
 
     # ii = ImageImporter("cofly")
     # train, test = ii.get_dataset()

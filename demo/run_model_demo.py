@@ -99,17 +99,17 @@ if __name__ == "__main__":
 
     # Prepare the env -- download data and models (only needed on data/models update)
     # Comment the line when not needed
-    setup_env(data=False, models=True)
+    # setup_env(data=False, models=True)
 
     # Load the dataset ("infest" -> labelled part of the dataset from Geo-K)
     ii = ImageImporter("infest", only_test=True)
     _, test = ii.get_dataset()
     test_loader = DataLoader(test, batch_size=1, shuffle=False)
     for model_path in [
-        # "training/garage/no_decay.pt",
-        # "training/garage/linear.pt",
-        # "training/garage/exponential.pt",
-        # "training/garage/squeeze.pt",
+        "training/garage/no_decay.pt",
+        "training/garage/linear.pt",
+        "training/garage/exponential.pt",
+        "training/garage/squeeze.pt",
         "training/garage/big_squeeze.pt",
     ]:
         print("Evaluating model {}".format(model_path))

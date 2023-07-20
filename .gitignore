@@ -291,7 +291,7 @@ andraz/sandbox.py
 andraz/data/agriadapt/
 andraz/data/cofly/
 andraz/training/wandb/
-andraz/training/garage/
+andraz/training/garage/infest/
 andraz/evaluation/plots/
 andraz/output/
 # End of Andraz custom entries
