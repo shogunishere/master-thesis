@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from torchmetrics import JaccardIndex
 from torchmetrics.classification import BinaryPrecision
@@ -16,10 +17,11 @@ from andraz.helpers.drive_fetch import setup_env
 
 
 class Inference:
-    def __init__(self, model):
+    def __init__(self, model, image_resolution=None):
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.model = self._load_test_model(model)
         self.model.eval()
+        self.image_resolution = image_resolution
         self.test_loader = self._load_test_data()
         self.results = {
             x: {"iou": {"back": 0, "weeds": 0}, "precision": {"back": 0, "weeds": 0}}
@@ -27,12 +29,14 @@ class Inference:
         }
 
     def _load_test_model(self, model):
-        return torch.load(
-            Path(settings.PROJECT_DIR) / "training/garage/" / model
-        )  # big_squeeze.pt")
+        return torch.load(Path(settings.PROJECT_DIR) / "training/garage/" / model)
 
     def _load_test_data(self):
-        ii = ImageImporter("cofly", only_test=True, smaller=settings.IMAGE_RESOLUTION)
+        ii = ImageImporter(
+            "cofly",
+            only_test=True,
+            smaller=self.image_resolution,
+        )
         _, test = ii.get_dataset()
         return DataLoader(test, batch_size=1, shuffle=False)
 
@@ -72,17 +76,26 @@ class Inference:
         results = []
         for j in range(y.shape[1]):
             results.append(float(precision_calculation(y[:, j], y_pred[:, j]).cpu()))
-        return results  # probably mean or smth
+        return results
 
     def run(self):
         self._infer()
 
 
 if __name__ == "__main__":
-    # Select one of the new models below
-    # infer = Inference("cofly_slim.pt")
-    infer = Inference("cofly_squeeze.pt")
-    infer.run()
+    # Download the Cofly dataset and place it in a proper directory.
+    # You only have to do this the first time, afterwards the data is ready to go.
+    # setup_env()
 
-    # Results are stored in a dictionary
-    print(infer.results)
+    # Select a model from andraz/training/garage directory and set the
+    # image resolution tuple to match the image input size of the model
+    for size in [128, 256, 512]:
+        infer = Inference(
+            "cofly_slim_{}.pt".format(size), image_resolution=(size, size)
+        )
+
+        infer.run()
+
+        # Results are stored in a dictionary
+        print(infer.results)
+        print()

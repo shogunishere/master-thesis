@@ -12,13 +12,19 @@ def setup_env(data=True, models=True):
 
     # Download the data
     if data:
+        # For infest (not interesting anymore)
+        # setup_folder(
+        #     "https://drive.google.com/file/d/1w2jbor9QR3iUQ0V1pphsmNHw4ZZdgf_f/view?usp=share_link",
+        #     project_dir
+        #     / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
+        # )
+        # Cofly
         setup_folder(
-            "https://drive.google.com/file/d/1w2jbor9QR3iUQ0V1pphsmNHw4ZZdgf_f/view?usp=share_link",
-            project_dir
-            / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
+            "https://drive.google.com/file/d/1GJpML5gFrBO0LZ5rGTOkaJUv8474sJOm/view?usp=sharing",
+            project_dir / "data/cofly/",
         )
 
-    # Download the models
+    # Download the models (are now just uploaded to git for convenience)
     if models:
         # setup_folder(
         #     "https://drive.google.com/file/d/1F8wtjxjESxWRomzAxuR43tJ2bOptTMfT/view?usp=share_link",
@@ -32,10 +38,11 @@ def setup_env(data=True, models=True):
         #     "https://drive.google.com/file/d/1RFT-lvGjsLyJXNnJic8bw_OMmDqrycno/view?usp=sharing",
         #     project_dir / "training/garage/",
         # )
-        setup_folder(
-            "https://drive.google.com/file/d/1sfQ-rpP8EZnBLLbKF6hIBDyfAxcga-Dw/view?usp=sharing",
-            project_dir / "training/garage/",
-        )
+        # setup_folder(
+        #     "https://drive.google.com/file/d/1sfQ-rpP8EZnBLLbKF6hIBDyfAxcga-Dw/view?usp=sharing",
+        #     project_dir / "training/garage/",
+        # )
+        pass
 
 
 def setup_folder(url, path):
