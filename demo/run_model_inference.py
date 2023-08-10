@@ -85,7 +85,7 @@ class Inference:
 if __name__ == "__main__":
     # Download the Cofly dataset and place it in a proper directory.
     # You only have to do this the first time, afterwards the data is ready to go.
-    # setup_env()
+    setup_env()
 
     # Select a model from andraz/training/garage directory and set the
     # image resolution tuple to match the image input size of the model
