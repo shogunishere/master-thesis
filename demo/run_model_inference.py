@@ -2,6 +2,7 @@
 # (using the methodology from the paper, with all weed classes grouped together in a single “Weed”
 # label). Ideally, for both networks we should have a basic test bench script that would load the
 # network, perform inference on the test set, and report both IoU and precision.
+import os
 from pathlib import Path
 
 import numpy as np
@@ -17,8 +18,10 @@ from andraz.helpers.drive_fetch import setup_env
 
 
 class Inference:
-    def __init__(self, model, image_resolution=None):
+    def __init__(self, model, image_resolution=None, create_images=False):
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.model_name = model.split(".")[0]
+        self.create_images = create_images
         self.model = self._load_test_model(model)
         self.model.eval()
         self.image_resolution = image_resolution
@@ -48,11 +51,20 @@ class Inference:
                 weed_iou = []
                 back_precision = []
                 weed_precision = []
+                i = 1
                 for X, y in self.test_loader:
                     X = X.to("cuda:0")
                     y = y.to("cuda:0")
                     y_pred = self.model.forward(X)
                     y_pred = torch.where(y_pred < 0.5, 0, 1)
+                    if self.create_images:
+                        self._generate_mask_image(
+                            X[0].permute(1, 2, 0).cpu(),
+                            y[0][1].cpu(),
+                            y_pred[0][1].cpu(),
+                            int(width_mult * 100),
+                            i,
+                        )
                     back_iou.append(self._calculate_iou(y[0][0], y_pred[0][0]))
                     weed_iou.append(self._calculate_iou(y[0][1], y_pred[0][1]))
                     back_precision.append(
@@ -61,6 +73,7 @@ class Inference:
                     weed_precision.append(
                         self._calculate_precision(y[0][1], y_pred[0][1])
                     )
+                    i += 1
                 self.results[width_mult]["iou"]["back"] = np.mean(back_iou)
                 self.results[width_mult]["iou"]["weeds"] = np.mean(weed_iou)
                 self.results[width_mult]["precision"]["back"] = np.mean(back_precision)
@@ -78,6 +91,18 @@ class Inference:
             results.append(float(precision_calculation(y[:, j], y_pred[:, j]).cpu()))
         return results
 
+    def _generate_mask_image(self, x, y, pred, width, i):
+        save_path = "images/{}".format(self.model_name)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        if width == 25:
+            plt.imshow(x)
+            plt.savefig("{}/{}_{}.png".format(save_path, str(i).zfill(4), "image"))
+            plt.imshow(y)
+            plt.savefig("{}/{}_{}.png".format(save_path, str(i).zfill(4), "mask"))
+        plt.imshow(pred)
+        plt.savefig("{}/{}_{}_{}.png".format(save_path, str(i).zfill(4), "pred", width))
+
     def run(self):
         self._infer()
 
@@ -85,13 +110,15 @@ class Inference:
 if __name__ == "__main__":
     # Download the Cofly dataset and place it in a proper directory.
     # You only have to do this the first time, afterwards the data is ready to go.
-    setup_env()
+    # setup_env()
 
     # Select a model from andraz/training/garage directory and set the
     # image resolution tuple to match the image input size of the model
     for size in [128, 256, 512]:
         infer = Inference(
-            "cofly_slim_{}.pt".format(size), image_resolution=(size, size)
+            "cofly_slim_{}.pt".format(size),
+            image_resolution=(size, size),
+            create_images=True,
         )
 
         infer.run()
