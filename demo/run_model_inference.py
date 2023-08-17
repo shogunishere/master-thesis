@@ -9,16 +9,28 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
-from torchmetrics import JaccardIndex
-from torchmetrics.classification import BinaryPrecision
+from torchmetrics import JaccardIndex, Recall
+from torchmetrics.classification import (
+    BinaryPrecision,
+    BinaryRecall,
+    BinaryF1Score,
+    BinaryJaccardIndex,
+)
 
 from andraz import settings
 from andraz.data.data import ImageImporter
 from andraz.helpers.drive_fetch import setup_env
 
+METRICS = {
+    "iou": BinaryJaccardIndex,
+    "precision": BinaryPrecision,
+    "recall": BinaryRecall,
+    "f1score": BinaryF1Score,
+}
+
 
 class Inference:
-    def __init__(self, model, image_resolution=None, create_images=False):
+    def __init__(self, model, metrics=None, image_resolution=None, create_images=False):
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.model_name = model.split(".")[0]
         self.create_images = create_images
@@ -27,11 +39,18 @@ class Inference:
         self.image_resolution = image_resolution
         self.test_loader = self._load_test_data()
         self.results = {
-            x: {"iou": {"back": 0, "weeds": 0}, "precision": {"back": 0, "weeds": 0}}
+            x: {
+                "iou": {"back": [], "weeds": []},
+                "precision": {"back": [], "weeds": []},
+                "recall": {"back": [], "weeds": []},
+                "f1score": {"back": [], "weeds": []},
+            }
             for x in settings.WIDTHS
         }
+        self.metrics = METRICS if metrics is None else metrics
 
-    def _load_test_model(self, model):
+    @staticmethod
+    def _load_test_model(model):
         return torch.load(Path(settings.PROJECT_DIR) / "training/garage/" / model)
 
     def _load_test_data(self):
@@ -47,16 +66,14 @@ class Inference:
         with torch.no_grad():
             for width_mult in settings.WIDTHS:
                 self.model.set_width(width_mult)
-                back_iou = []
-                weed_iou = []
-                back_precision = []
-                weed_precision = []
+
                 i = 1
                 for X, y in self.test_loader:
                     X = X.to("cuda:0")
                     y = y.to("cuda:0")
                     y_pred = self.model.forward(X)
                     y_pred = torch.where(y_pred < 0.5, 0, 1)
+
                     if self.create_images:
                         self._generate_mask_image(
                             X[0].permute(1, 2, 0).cpu(),
@@ -65,31 +82,24 @@ class Inference:
                             int(width_mult * 100),
                             i,
                         )
-                    back_iou.append(self._calculate_iou(y[0][0], y_pred[0][0]))
-                    weed_iou.append(self._calculate_iou(y[0][1], y_pred[0][1]))
-                    back_precision.append(
-                        self._calculate_precision(y[0][0], y_pred[0][0])
-                    )
-                    weed_precision.append(
-                        self._calculate_precision(y[0][1], y_pred[0][1])
-                    )
-                    i += 1
-                self.results[width_mult]["iou"]["back"] = np.mean(back_iou)
-                self.results[width_mult]["iou"]["weeds"] = np.mean(weed_iou)
-                self.results[width_mult]["precision"]["back"] = np.mean(back_precision)
-                self.results[width_mult]["precision"]["weeds"] = np.mean(weed_precision)
+
+                    for metric in self.metrics:
+                        for j, pred_class in enumerate(["back", "weeds"]):
+                            self.results[width_mult][metric][pred_class].append(
+                                self.metrics[metric](validate_args=False)
+                                .to(self.device)(y[0][j], y_pred[0][j])
+                                .cpu()
+                            )
+        self._average_results()
         return self.results
 
-    def _calculate_iou(self, y, y_pred):
-        jaccard = JaccardIndex("binary").to(self.device)
-        return jaccard(y, y_pred).cpu()
-
-    def _calculate_precision(self, y, y_pred):
-        precision_calculation = BinaryPrecision(validate_args=False).to(self.device)
-        results = []
-        for j in range(y.shape[1]):
-            results.append(float(precision_calculation(y[:, j], y_pred[:, j]).cpu()))
-        return results
+    def _average_results(self):
+        for width_mult in settings.WIDTHS:
+            for metric in self.metrics:
+                for j, pred_class in enumerate(["back", "weeds"]):
+                    self.results[width_mult][metric][pred_class] = np.mean(
+                        self.results[width_mult][metric][pred_class]
+                    )
 
     def _generate_mask_image(self, x, y, pred, width, i):
         save_path = "images/{}".format(self.model_name)
@@ -107,22 +117,68 @@ class Inference:
         self._infer()
 
 
+class Comparator:
+    def __init__(self, models, metrics=None):
+        self.models = models
+
+        self.metrics = METRICS if metrics is None else metrics
+
+    def _draw_tab(self, results):
+        for pred_class in ["back", "weeds"]:
+            for metric in self.metrics:
+                print(
+                    "======================================================================================"
+                )
+                print(metric, pred_class)
+                print()
+                print("{:6s}".format(""), end="")
+                for model, _ in self.models:
+                    print("{:20s}".format(model), end=" ")
+                print()
+                for width in settings.WIDTHS:
+                    print("{:5s}".format(str(width)), end=" ")
+                    for model, _ in self.models:
+                        print(
+                            "{:20s}".format(
+                                str(
+                                    round(
+                                        results[model][width][metric][pred_class] * 100,
+                                        2,
+                                    )
+                                )
+                                + " %"
+                            ),
+                            end=" ",
+                        )
+                    print()
+                print()
+
+    def run(self):
+        # Select a model from andraz/training/garage directory and set the
+        # image resolution tuple to match the image input size of the model
+        results = {}
+        for model, size in self.models:
+            infer = Inference(
+                model,
+                image_resolution=(size, size),
+                create_images=False,
+            )
+            infer.run()
+            results[model] = infer.results
+
+        self._draw_tab(results)
+
+
 if __name__ == "__main__":
     # Download the Cofly dataset and place it in a proper directory.
     # You only have to do this the first time, afterwards the data is ready to go.
     # setup_env()
 
-    # Select a model from andraz/training/garage directory and set the
-    # image resolution tuple to match the image input size of the model
-    for size in [128, 256, 512]:
-        infer = Inference(
-            "cofly_slim_{}.pt".format(size),
-            image_resolution=(size, size),
-            create_images=True,
-        )
+    # A tuple of model name and image input size
+    models = [("cofly_slim_{}.pt".format(size), size) for size in [128, 256, 512]] + [
+        ("cofly_squeeze.pt", 128)
+    ]
+    comparator = Comparator(models)
 
-        infer.run()
-
-        # Results are stored in a dictionary
-        print(infer.results)
-        print()
+    # Run inference for multiple models and display comparative tables
+    comparator.run()

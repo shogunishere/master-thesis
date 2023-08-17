@@ -110,9 +110,11 @@ class ImageImporter:
             if self.smaller:
                 img = smaller(img)
 
+            # Data augmentation
             imgh = transforms.RandomHorizontalFlip(p=1)(img)
             imgv = transforms.RandomVerticalFlip(p=1)(img)
             imghv = transforms.RandomVerticalFlip(p=1)(imgh)
+
             X.append(img)
             X.append(imgh)
             X.append(imgv)
