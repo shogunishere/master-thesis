@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
     # A tuple of model name and image input size
     models = [("cofly_slim_{}.pt".format(size), size) for size in [128, 256, 512]] + [
-        ("cofly_squeeze.pt", 128)
+        ("cofly_squeeze_{}.pt".format(size), size) for size in [128, 256, 512]
     ]
     comparator = Comparator(models)
 
