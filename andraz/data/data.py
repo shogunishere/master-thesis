@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import cv2
 from torch import Generator, tensor, argmax, ones, zeros, cat, unique
 from torch.utils.data import Dataset, random_split
 from torchvision import transforms
@@ -176,6 +177,15 @@ class ImageImporter:
             y.append(self._cofly_prep_mask(mask))
 
         return ImageDataset(X, y)
+    
+    def tensor_to_image(self, tensor_images):
+        images = []
+        for elem in tensor_images:
+            elem = (elem.numpy() * 255).astype(np.uint8)
+            elem = elem.transpose(1, 2, 0)
+            image = cv2.cvtColor(elem, cv2.COLOR_RGB2BGR)
+            images.append(image)
+        return images
 
     def _cofly_prep_mask(self, mask):
         return (
