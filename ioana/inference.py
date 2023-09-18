@@ -1,4 +1,5 @@
-from pandas import DataFrame
+from pathlib import Path
+
 from sklearn.preprocessing import MinMaxScaler
 
 from ioana.image_processing.spectral_features import SpectralFeatures
@@ -12,12 +13,10 @@ import pandas as pd
 import joblib
 import warnings
 
-from ioana.KNN_model.KNN import KnnPrediction
-
 # Andraž is lazy... but these are not a problem.
-# warnings.filterwarnings(
-#     "ignore",
-# )
+warnings.filterwarnings(
+    "ignore",
+)
 
 
 class AdaptiveWidth:
@@ -162,7 +161,7 @@ class AdaptiveWidth:
 
     def get_image_width(self, image):
         train_features = pd.read_pickle(
-            "/home/andraz/Projects/agriadapt/ioana/train_features.pickle"
+            Path(settings.PROJECT_DIR) / "ioana/train_features.pickle"
         )
         train_features = train_features.drop(["index"], axis="columns")
         scaler = MinMaxScaler()
@@ -172,7 +171,7 @@ class AdaptiveWidth:
 
         for width in settings.WIDTHS[0:-1]:
             model = joblib.load(
-                "/home/andraz/Projects/agriadapt/ioana/knn_{}.pickle".format(width)
+                Path(settings.PROJECT_DIR) / "ioana/knn_{}.pickle".format(width)
             )
             try:
                 prediction = model.predict(image)

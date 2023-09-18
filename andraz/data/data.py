@@ -88,7 +88,9 @@ class ImageImporter:
         """
         Import images and their belonging segmentation masks (one-hot encoded).
         """
-        images = sorted(os.listdir(self.project_path / "data/cofly/images/images/"))
+        images = sorted(
+            os.listdir(self.project_path / "andraz/data/cofly/images/images/")
+        )
         random.seed(42069)
         idx = [x for x in range(len(images))]
         random.shuffle(idx)
@@ -106,7 +108,9 @@ class ImageImporter:
 
         for file_name in images:
             img = create_tensor(
-                Image.open(self.project_path / "data/cofly/images/images/" / file_name)
+                Image.open(
+                    self.project_path / "andraz/data/cofly/images/images/" / file_name
+                )
             )
             if self.smaller:
                 img = smaller(img)
@@ -123,7 +127,7 @@ class ImageImporter:
 
             # Open the mask
             mask = Image.open(
-                self.project_path / "data/cofly/labels/labels/" / file_name
+                self.project_path / "andraz/data/cofly/labels/labels/" / file_name
             )
             if self.smaller:
                 mask = smaller(mask)
@@ -154,7 +158,9 @@ class ImageImporter:
 
         for file_name in images:
             img = create_tensor(
-                Image.open(self.project_path / "data/cofly/images/images/" / file_name)
+                Image.open(
+                    self.project_path / "andraz/data/cofly/images/images/" / file_name
+                )
             )
             if self.smaller:
                 img = smaller(img)
@@ -163,7 +169,7 @@ class ImageImporter:
 
             # Open the mask
             mask = Image.open(
-                self.project_path / "data/cofly/labels/labels/" / file_name
+                self.project_path / "andraz/data/cofly/labels/labels/" / file_name
             )
             if self.smaller:
                 mask = smaller(mask)
@@ -177,7 +183,7 @@ class ImageImporter:
             y.append(self._cofly_prep_mask(mask))
 
         return ImageDataset(X, y)
-    
+
     def tensor_to_image(self, tensor_images):
         images = []
         for elem in tensor_images:
@@ -223,7 +229,7 @@ class ImageImporter:
         images = sorted(
             os.listdir(
                 self.project_path
-                / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                / "andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
                 / split
                 / "images/"
             )
@@ -237,7 +243,7 @@ class ImageImporter:
         for file_name in images:
             img = Image.open(
                 self.project_path
-                / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                / "andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
                 / split
                 / "images/"
                 / file_name
@@ -264,7 +270,7 @@ class ImageImporter:
             # Then, label by label, add to other classes and remove from background.
             with open(
                 self.project_path
-                / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
+                / "andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
                 / split
                 / "labels/"
                 / file_name.replace("jpg", "txt")

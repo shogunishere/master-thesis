@@ -15,6 +15,7 @@ from torchmetrics.classification import (
     BinaryF1Score,
     BinaryJaccardIndex,
 )
+from torchvision.transforms import transforms
 
 from andraz import settings
 from andraz.data.data import ImageImporter
@@ -44,7 +45,6 @@ class Inference:
         self.model = self._load_test_model(model)
         self.model.eval()
         self.image_resolution = image_resolution
-        self.test_loader = self._load_test_data()
         self.metrics = METRICS if metrics is None else metrics
         self.results = {
             x: {
@@ -60,25 +60,27 @@ class Inference:
 
     @staticmethod
     def _load_test_model(model):
-        return torch.load(Path(settings.PROJECT_DIR) / "training/garage/" / model)
+        return torch.load(
+            Path(settings.PROJECT_DIR) / "andraz/training/garage/" / model
+        )
 
-    def _load_test_data(self):
+    def _load_test_data(self, smaller):
         ii = ImageImporter(
             "cofly",
             only_test=True,
-            smaller=self.image_resolution,
+            smaller=smaller,
         )
         _, test = ii.get_dataset()
         return DataLoader(test, batch_size=1, shuffle=False)
 
     def _infer(self):
-
+        # Infer for all available widths of the model
         with torch.no_grad():
+            test_loader = self._load_test_data(self.image_resolution)
             for width in settings.WIDTHS:
                 self.model.set_width(width)
-
                 i = 1
-                for X, y in self.test_loader:
+                for X, y in test_loader:
                     X = X.to("cuda:0")
                     y = y.to("cuda:0")
                     y_pred = self.model.forward(X)
@@ -100,13 +102,21 @@ class Inference:
                                 .to(self.device)(y[0][j], y_pred[0][j])
                                 .cpu()
                             )
+        # Infer with the adaptation algorithm
         with torch.no_grad():
+            # We load the test loader again, as we need full-size
+            # images in order for the width selection to work properly
+            test_loader = self._load_test_data(False)
+            smaller = transforms.Resize(self.image_resolution)
             i = 1
-            for X, y in self.test_loader:
+            for X, y in test_loader:
                 # Get the image width and set the model to it
                 image = self.tensor_to_image(X)[0]
                 width = self.width_selection.get_image_width(image)
                 self.model.set_width(width)
+                # Resize the image to the required input size
+                X = smaller(X)
+                y = smaller(y)
 
                 X = X.to("cuda:0")
                 y = y.to("cuda:0")
@@ -118,7 +128,7 @@ class Inference:
                         X[0].permute(1, 2, 0).cpu(),
                         y[0][1].cpu(),
                         y_pred[0][1].cpu(),
-                        int(width * 100),
+                        "adapt",
                         i,
                     )
 
