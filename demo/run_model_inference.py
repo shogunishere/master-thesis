@@ -9,7 +9,6 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
-from torchmetrics import JaccardIndex, Recall
 from torchmetrics.classification import (
     BinaryPrecision,
     BinaryRecall,
@@ -20,6 +19,7 @@ from torchmetrics.classification import (
 from andraz import settings
 from andraz.data.data import ImageImporter
 from andraz.helpers.drive_fetch import setup_env
+from ioana.inference import AdaptiveWidth
 
 METRICS = {
     "iou": BinaryJaccardIndex,
@@ -30,7 +30,14 @@ METRICS = {
 
 
 class Inference:
-    def __init__(self, model, metrics=None, image_resolution=None, create_images=False):
+    def __init__(
+        self,
+        model,
+        metrics=None,
+        image_resolution=None,
+        create_images=False,
+        mode="sweep",
+    ):
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.model_name = model.split(".")[0]
         self.create_images = create_images
@@ -38,6 +45,7 @@ class Inference:
         self.model.eval()
         self.image_resolution = image_resolution
         self.test_loader = self._load_test_data()
+        self.metrics = METRICS if metrics is None else metrics
         self.results = {
             x: {
                 "iou": {"back": [], "weeds": []},
@@ -45,9 +53,10 @@ class Inference:
                 "recall": {"back": [], "weeds": []},
                 "f1score": {"back": [], "weeds": []},
             }
-            for x in settings.WIDTHS
+            for x in settings.WIDTHS + ["adapt"]
         }
-        self.metrics = METRICS if metrics is None else metrics
+        self.width_selection = AdaptiveWidth()
+        self.tensor_to_image = ImageImporter("cofly").tensor_to_image
 
     @staticmethod
     def _load_test_model(model):
@@ -63,9 +72,10 @@ class Inference:
         return DataLoader(test, batch_size=1, shuffle=False)
 
     def _infer(self):
+
         with torch.no_grad():
-            for width_mult in settings.WIDTHS:
-                self.model.set_width(width_mult)
+            for width in settings.WIDTHS:
+                self.model.set_width(width)
 
                 i = 1
                 for X, y in self.test_loader:
@@ -79,22 +89,51 @@ class Inference:
                             X[0].permute(1, 2, 0).cpu(),
                             y[0][1].cpu(),
                             y_pred[0][1].cpu(),
-                            int(width_mult * 100),
+                            int(width * 100),
                             i,
                         )
 
                     for metric in self.metrics:
                         for j, pred_class in enumerate(["back", "weeds"]):
-                            self.results[width_mult][metric][pred_class].append(
+                            self.results[width][metric][pred_class].append(
                                 self.metrics[metric](validate_args=False)
                                 .to(self.device)(y[0][j], y_pred[0][j])
                                 .cpu()
                             )
+        with torch.no_grad():
+            i = 1
+            for X, y in self.test_loader:
+                # Get the image width and set the model to it
+                image = self.tensor_to_image(X)[0]
+                width = self.width_selection.get_image_width(image)
+                self.model.set_width(width)
+
+                X = X.to("cuda:0")
+                y = y.to("cuda:0")
+                y_pred = self.model.forward(X)
+                y_pred = torch.where(y_pred < 0.5, 0, 1)
+
+                if self.create_images:
+                    self._generate_mask_image(
+                        X[0].permute(1, 2, 0).cpu(),
+                        y[0][1].cpu(),
+                        y_pred[0][1].cpu(),
+                        int(width * 100),
+                        i,
+                    )
+
+                for metric in self.metrics:
+                    for j, pred_class in enumerate(["back", "weeds"]):
+                        self.results["adapt"][metric][pred_class].append(
+                            self.metrics[metric](validate_args=False)
+                            .to(self.device)(y[0][j], y_pred[0][j])
+                            .cpu()
+                        )
         self._average_results()
         return self.results
 
     def _average_results(self):
-        for width_mult in settings.WIDTHS:
+        for width_mult in settings.WIDTHS + ["adapt"]:
             for metric in self.metrics:
                 for j, pred_class in enumerate(["back", "weeds"]):
                     self.results[width_mult][metric][pred_class] = np.mean(
@@ -118,10 +157,10 @@ class Inference:
 
 
 class Comparator:
-    def __init__(self, models, metrics=None):
+    def __init__(self, models, metrics=None, mode="sweep"):
         self.models = models
-
         self.metrics = METRICS if metrics is None else metrics
+        self.mode = mode
 
     def _draw_tab(self, results):
         for pred_class in ["back", "weeds"]:
@@ -135,7 +174,7 @@ class Comparator:
                 for model, _ in self.models:
                     print("{:20s}".format(model), end=" ")
                 print()
-                for width in settings.WIDTHS:
+                for width in settings.WIDTHS + ["adapt"]:
                     print("{:5s}".format(str(width)), end=" ")
                     for model, _ in self.models:
                         print(
@@ -162,10 +201,10 @@ class Comparator:
                 model,
                 image_resolution=(size, size),
                 create_images=False,
+                mode=self.mode,
             )
             infer.run()
             results[model] = infer.results
-
         self._draw_tab(results)
 
 
@@ -178,7 +217,7 @@ if __name__ == "__main__":
     models = [("cofly_slim_{}.pt".format(size), size) for size in [128, 256, 512]] + [
         ("cofly_squeeze_{}.pt".format(size), size) for size in [128, 256, 512]
     ]
-    comparator = Comparator(models)
+    comparator = Comparator(models, mode="adaptive")
 
     # Run inference for multiple models and display comparative tables
     comparator.run()

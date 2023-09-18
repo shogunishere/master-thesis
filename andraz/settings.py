@@ -39,9 +39,11 @@ CLASSES = [0, 1, 3, 4]
 WANDB = False
 WIDTHS = [0.25, 0.50, 0.75, 1.0]
 
-KNN_WIDTHS = {0.25: 15,
-              0.50: 4,
-              0.75: 4}
+KNN_WIDTHS = {
+    0.25: 15,
+    0.50: 4,
+    0.75: 4,
+}
 
 # Infest loss weights
 # LOSS_WEIGHTS = [0.1, 0.45, 0.45]
