@@ -203,11 +203,32 @@ class Comparator:
                     print()
                 print()
 
+    def _draw_graph(self, model, results, mean_width):
+        for pred_class in ["weeds", "back"]:
+            for metric in self.metrics:
+                metric_scores = []
+                for width in settings.WIDTHS + ["adapt"]:
+                    score = round(results[width][metric][pred_class] * 100, 2)
+                    metric_scores.append(score)
+                x = settings.WIDTHS + ["adaptive"]
+                y = metric_scores
+                x_ticks = settings.WIDTHS + [round(mean_width, 2)]
+
+                plt.plot(x_ticks[:-1], y[:-1], marker='o', linestyle='-', label="widths")
+                plt.plot([round(mean_width, 2)], [y[-1]], marker='o', color='red', label="adaptive")
+                plt.xlabel("widths")
+                plt.xticks(x_ticks, x_ticks)
+                plt.ylabel(f"{metric} scores")
+                plt.title(f"{metric} {pred_class} scores for model {model}")
+                plt.legend()
+                plt.show()
+
     def run(self):
         # Select a model from andraz/training/garage directory and set the
         # image resolution tuple to match the image input size of the model
         results = {}
         graph = True
+        weighted_mean = 0
         for model, size in self.models:
             infer = Inference(
                 model,
@@ -233,6 +254,12 @@ class Comparator:
                 fig.show()
                 # Only show once as all the plots will be the same
                 graph = False
+            
+            weighted_sum = sum(key * value for key, value in infer.width_distribution.items())
+            total_weight = sum(infer.width_distribution.values())
+            weighted_mean = weighted_sum / total_weight
+
+            self._draw_graph(model, results[model], weighted_mean)
 
         self._draw_tab(results)
 

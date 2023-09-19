@@ -85,23 +85,23 @@ class KnnPrediction:
             print(f"Classification Report for width {self.width} for {i} number of neightbors \n {classification_report(y_test, y_pred)}")
         
         if draw_graph:
-            # plt.figure(figsize=(15, 6))
-            # plt.plot(range(1, 20), f1_scores, linestyle='dashed', marker='o', markerfacecolor='blue', markersize=10)
-            # plt.title(f'F1 score K value for width {width}')
-            # plt.xlabel('K value')
-            # plt.ylabel('F1 score')
+            plt.figure(figsize=(15, 6))
+            plt.plot(range(1, 20), f1_scores, linestyle='dashed', marker='o', markerfacecolor='blue', markersize=10)
+            plt.title(f'F1 score K value for width {width}')
+            plt.xlabel('K value')
+            plt.ylabel('F1 score')
 
-            # plt.figure(figsize=(15, 6))
-            # plt.plot(range(1, 20), matthews_coeff_scores, linestyle='dashed', marker='o', markerfacecolor='red', markersize=10)
-            # plt.title(f"Matthew's coefficiet score K value for width {width}")
-            # plt.xlabel("K value")
-            # plt.ylabel("Matthew's coefficiet score")
+            plt.figure(figsize=(15, 6))
+            plt.plot(range(1, 20), matthews_coeff_scores, linestyle='dashed', marker='o', markerfacecolor='red', markersize=10)
+            plt.title(f"Matthew's coefficiet score K value for width {width}")
+            plt.xlabel("K value")
+            plt.ylabel("Matthew's coefficiet score")
 
-            # plt.figure(figsize=(15, 6))
-            # plt.plot(range(1, 20), precision_scores, linestyle='dashed', marker='o', markerfacecolor='green', markersize=10)
-            # plt.title(f"Precision score K value for width {width}")
-            # plt.xlabel("K value")
-            # plt.ylabel("Precision score")
+            plt.figure(figsize=(15, 6))
+            plt.plot(range(1, 20), precision_scores, linestyle='dashed', marker='o', markerfacecolor='green', markersize=10)
+            plt.title(f"Precision score K value for width {width}")
+            plt.xlabel("K value")
+            plt.ylabel("Precision score")
 
             plt.figure(figsize=(15, 6))
             plt.plot(range(1, 20), accuracy_scores, linestyle='dashed', marker='o', markerfacecolor='orange', markersize=10)
@@ -118,19 +118,3 @@ if __name__ == "__main__":
     X_train, y_train, X_test, y_test = knn.load_data()
     X_train, X_test = knn.scale_data(X_train, X_test)
     y_pred = knn.fit_model(X_train, y_train, X_test, y_test)
-# %%
-from andraz import settings
-
-for width, _ in settings.KNN_WIDTHS.items():
-    print(f" width {width}")
-
-# %%
-def _load_data(self):
-    ii = ImageImporter(
-        "cofly",
-        only_test=False,
-        smaller=self.image_resolution,
-    )
-    train, test = ii.get_dataset()
-
-# %%

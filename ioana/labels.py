@@ -125,16 +125,14 @@ class Labels:
             self.results["test"][width]["precision"]["weeds"],
         )
 
-    def _calculate_precision_mean(self, precision_scores, draw_graph=False):
+    def _calculate_precision_mean(self, precision_scores, width, draw_graph=False):
         numeric_values = [value.item() for value in precision_scores]
-        boxplot = plt.boxplot(numeric_values, vert=False)
-        mean = "%.3f" % (boxplot["medians"][0].get_xdata()[0])
+        mean = "%.3f" % (np.median(numeric_values))
+        print(f"mean precision value for {width} is {mean}")
 
         if draw_graph:
-            plt.figure()
-            plt.title(
-                f"Precision Score Distribution for 'weeds' {self.width} model {self.model_name}"
-            )
+            plt.boxplot(numeric_values, vert=False)
+            plt.title(f"Precision Score Distribution for 'weeds' {width} model {self.model_name}")
             plt.xlabel("Precision Score")
             plt.ylabel("Class: weeds")
             plt.show()
@@ -150,7 +148,7 @@ class Labels:
         test_features = pd.read_pickle(
             Path(settings.PROJECT_DIR) / "ioana/test_features.pickle"
         )
-        mean = float(self._calculate_precision_mean(precision_list_train))
+        mean = float(self._calculate_precision_mean(precision_list_train, width))
         for features, precisions_list in [
             (train_features, precision_list_train),
             (test_features, precision_list_test),
@@ -388,5 +386,6 @@ if __name__ == "__main__":
     test_features.to_pickle(file_name)
     print(f"Testing features saved to {file_name}")
 
+    # Comment lines 290-391 for complete, non-filtered features dataframes
     labels = Labels("cofly_slim_256.pt")
     labels.run()

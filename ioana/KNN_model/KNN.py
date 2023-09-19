@@ -46,12 +46,8 @@ class KnnPrediction:
         return scaled_X_train, scaled_X_test, scaler
 
     def fit_model(
-        self, X_train, y_train, X_test, y_test, save_model=False, draw_graph=False
+        self, X_train, y_train, X_test, y_test, save_model=False, metrics=False
     ):
-        f1_scores = []
-        matthews_coeff_scores = []
-        precision_scores = []
-        accuracy_scores = []
         knn = KNeighborsClassifier(n_neighbors=self.k_neightbors)
         knn.fit(X_train, y_train)
         self.model = knn
@@ -62,15 +58,22 @@ class KnnPrediction:
             print(f"KNN model for {self.width} saved to file")
 
         y_pred = knn.predict(X_test)
-        print(f"y_pred for width {self.width}: {y_pred}")
-        print(f"y_test for width {self.width}: {y_test.tolist()}")
-        f1_scores.append(f1_score(y_test, y_pred, average="weighted"))
-        matthews_coeff_scores.append(matthews_corrcoef(y_test, y_pred))
-        precision_scores.append(precision_score(y_test, y_pred))
-        accuracy_scores.append(accuracy_score(y_test, y_pred))
-        # print(f"Classification Report for width {self.width} for {i} number of neightbors \n {classification_report(y_test, y_pred)}")
 
-        if draw_graph:
+        if metrics:
+            f1_scores = []
+            matthews_coeff_scores = []
+            precision_scores = []
+            accuracy_scores = []
+            for i in range(1, 20):
+                knn = KNeighborsClassifier(n_neighbors=i)
+                knn.fit(X_train, y_train)
+                y_pred = knn.predict(X_test)
+                f1_scores.append(f1_score(y_test, y_pred, average='weighted'))
+                matthews_coeff_scores.append(matthews_corrcoef(y_test, y_pred))
+                precision_scores.append(precision_score(y_test, y_pred))
+                accuracy_scores.append(accuracy_score(y_test, y_pred))
+                print(f"Classification Report for width {self.width} for {i} number of neightbors \n {classification_report(y_test, y_pred)}")
+
             plt.figure(figsize=(15, 6))
             plt.plot(
                 range(1, 20),
@@ -83,6 +86,7 @@ class KnnPrediction:
             plt.title(f"F1 score K value for width {self.width}")
             plt.xlabel("K value")
             plt.ylabel("F1 score")
+            plt.show()
 
             plt.figure(figsize=(15, 6))
             plt.plot(
@@ -96,6 +100,7 @@ class KnnPrediction:
             plt.title(f"Matthew's coefficiet score K value for width {self.width}")
             plt.xlabel("K value")
             plt.ylabel("Matthew's coefficiet score")
+            plt.show()
 
             plt.figure(figsize=(15, 6))
             plt.plot(
@@ -109,6 +114,7 @@ class KnnPrediction:
             plt.title(f"Precision score K value for width {self.width}")
             plt.xlabel("K value")
             plt.ylabel("Precision score")
+            plt.show()
 
             plt.figure(figsize=(15, 6))
             plt.plot(
@@ -122,5 +128,6 @@ class KnnPrediction:
             plt.title(f"Accuracy score K value for width {self.width}")
             plt.xlabel("K value")
             plt.ylabel("Accuracy score")
+            plt.show()
 
         return y_pred
