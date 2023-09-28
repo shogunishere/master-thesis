@@ -23,6 +23,20 @@ class AdaptiveWidth:
     def __init__(self, train_feature_file="ioana/train_features.pickle"):
         self.train_feature_file = train_feature_file
 
+        # Initialise the scaler for image scaling
+        train_features = pd.read_pickle(
+            Path(settings.PROJECT_DIR) / self.train_feature_file
+        ).drop(["index"], axis="columns")
+        self.scaler = MinMaxScaler()
+        self.scaler.fit(train_features)
+
+        # Load the models used to predict the width
+        self.models = {}
+        for width in settings.WIDTHS[0:-1]:
+            self.models[width] = joblib.load(
+                Path(settings.PROJECT_DIR) / "ioana/knn_{}.pickle".format(width)
+            )
+
     def _calculate_image_features(self, image):
         """
         Generates a one row Pandas dataframe with features for a given image.
@@ -160,21 +174,11 @@ class AdaptiveWidth:
         return df
 
     def get_image_width(self, image):
-        train_features = pd.read_pickle(
-            Path(settings.PROJECT_DIR) / self.train_feature_file
-        )
-        train_features = train_features.drop(["index"], axis="columns")
-        scaler = MinMaxScaler()
-        scaler.fit(train_features)
-        image = self._calculate_image_features(image)
-        image = scaler.transform(image)
+        image = self.scaler.transform(self._calculate_image_features(image))
 
         for width in settings.WIDTHS[0:-1]:
-            model = joblib.load(
-                Path(settings.PROJECT_DIR) / "ioana/knn_{}.pickle".format(width)
-            )
             try:
-                prediction = model.predict(image)
+                prediction = self.models[width].predict(image)
                 if int(prediction) == 1:
                     return width
             except IndexError:

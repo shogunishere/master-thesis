@@ -380,14 +380,14 @@ if __name__ == "__main__":
                 list_of_dictionaries, columns=column_headers, index=None
             )
 
-    file_name = Path(settings.PROJECT_DIR) / "ioana/geok_train_features.pickle"
+    file_name = Path(settings.PROJECT_DIR) / "ioana/train_features.pickle"
     train_features.to_pickle(file_name)
     print(f"Training features saved to {file_name}")
 
-    file_name = Path(settings.PROJECT_DIR) / "ioana/geok_test_features.pickle"
+    file_name = Path(settings.PROJECT_DIR) / "ioana/test_features.pickle"
     test_features.to_pickle(file_name)
     print(f"Testing features saved to {file_name}")
 
     # Comment lines 290-391 for complete, non-filtered features dataframes
-    labels = Labels("geok_256.pt")
+    labels = Labels("geok_slim_128_trans.pt")
     labels.run()

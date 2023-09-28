@@ -58,7 +58,7 @@ class Inference:
         }
         self.width_distribution = {x: 0 for x in settings.WIDTHS}
         self.width_selection = AdaptiveWidth(
-            train_feature_file="ioana/geok_train_features.pickle"
+            train_feature_file="ioana/train_features.pickle"
         )
         self.width_selection_widths = []
         self.tensor_to_image = ImageImporter("cofly").tensor_to_image
@@ -216,9 +216,10 @@ class Inference:
 
 
 class Comparator:
-    def __init__(self, models, metrics=None):
+    def __init__(self, models, metrics=None, graphs=False):
         self.models = models
         self.metrics = METRICS if metrics is None else metrics
+        self.graphs = graphs
 
     def _draw_tab(self, results):
         for pred_class in ["back", "weeds"]:
@@ -228,12 +229,12 @@ class Comparator:
                 )
                 print(metric, pred_class)
                 print()
-                print("{:8s}".format(""), end="")
+                print("{:10s}".format(""), end="")
                 for model, _ in self.models:
                     print("{:20s}".format(model), end=" ")
                 print()
                 for width in settings.WIDTHS + ["adapt", "oracle"]:
-                    print("{:7s}".format(str(width)), end=" ")
+                    print("{:9s}".format(str(width)), end=" ")
                     for model, _ in self.models:
                         print(
                             "{:20s}".format(
@@ -250,7 +251,7 @@ class Comparator:
                     print()
 
                 # Print average width selected for adaptation alg
-                print("{:7s}".format("adapt"), end=" ")
+                print("{:9s}".format("adapt w"), end=" ")
                 for model, _ in self.models:
                     print(
                         "{:20s}".format(
@@ -266,7 +267,7 @@ class Comparator:
                 print()
 
                 # Print average width selected for oracle
-                print("{:7s}".format("oracle"), end=" ")
+                print("{:9s}".format("oracle w"), end=" ")
                 for model, _ in self.models:
                     print(
                         "{:20s}".format(
@@ -351,7 +352,8 @@ class Comparator:
             total_weight = sum(infer.width_distribution.values())
             weighted_mean = weighted_sum / total_weight
 
-            self._draw_graph(model, results[model], weighted_mean)
+            if self.graphs:
+                self._draw_graph(model, results[model], weighted_mean)
 
         self._draw_tab(results)
 
@@ -373,7 +375,7 @@ if __name__ == "__main__":
     # models = [("cofly_slim_{}.pt".format(size), size) for size in [128, 256, 512]] + [
     #     ("cofly_squeeze_{}.pt".format(size), size) for size in [128, 256, 512]
     # ]
-    models = [("geok_256.pt", 256), ("transfer_geok_256.pt", 256)]
+    models = [("geok_slim_128.pt", 128), ("geok_slim_128_trans.pt", 128)]
     comparator = Comparator(models)
 
     # Run inference for multiple models and display comparative tables
