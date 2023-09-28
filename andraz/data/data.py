@@ -308,8 +308,8 @@ class ImageImporter:
 
     def _fetch_geok_split(
         self,
-        data_dir="andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
-        split="train",
+        data_dir,
+        split,
     ):
         images = sorted(os.listdir(self.project_path / data_dir / split / "images/"))
         create_tensor = transforms.ToTensor()

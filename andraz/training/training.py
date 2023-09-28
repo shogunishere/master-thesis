@@ -79,6 +79,11 @@ class Training:
         print("Dropout: {}".format(self.dropout))
         print("Network widths: {}".format(self.widths))
         print("Loss function weights: {}".format(settings.LOSS_WEIGHTS))
+        print(
+            "Transfer learning model: {}".format(
+                self.continue_model if self.continue_model else "None"
+            )
+        )
         print("=======================================")
 
     def _report_model(self, model, input, loader):
@@ -173,7 +178,7 @@ class Training:
         # Prepare the data for training and validation
         ii = ImageImporter(
             self.dataset,
-            validation=False,
+            validation=True,
             sample=self.sample,
             smaller=self.image_resolution,
         )
@@ -202,10 +207,13 @@ class Training:
                     "Dropout": settings.DROPOUT,
                     "Dataset": self.dataset,
                     "Loss Function Weights": settings.LOSS_WEIGHTS,
+                    "Transfer learning": self.continue_model
+                    if self.continue_model
+                    else "None",
                 },
             )
             wname = run.name.split("-")
-            garage_path = "garage/{} {} {}/".format(
+            garage_path = "garage/runs/{} {} {}/".format(
                 wname[2].zfill(4), wname[0], wname[1]
             )
             os.mkdir(garage_path)
@@ -332,20 +340,28 @@ if __name__ == "__main__":
     # Train on GPU if available
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-    # tr = Training(device, dataset="cofly")
     # for sample_size in [10, 25, 50, 100]:
-    tr = Training(
-        device,
-        dataset="geok",
-        # sample=sample_size,
-        # continue_model="cofly_transfer_256.pt",
-    )
-    tr.train()
-    #
-    # tr = Training(
-    #     device,
-    #     dataset="infest",
-    #     # sample=sample_size,
-    #     continue_model="cofly_transfer_256.pt",
-    # )
-    # tr.train()
+    # We need to train the new geok models of different sizes with and without transfer learning from cofly dataset
+    # We do this for both sunet and ssunet
+    for architecture in ["slim", "squeeze"]:
+        for image_resolution in [(128, 128), (256, 256), (512, 512)]:
+            tr = Training(
+                device,
+                dataset="geok",
+                image_resolution=image_resolution,
+                architecture=architecture,
+                # sample=sample_size,
+                # continue_model="cofly_transfer_256.pt",
+            )
+            tr.train()
+            tr = Training(
+                device,
+                dataset="geok",
+                image_resolution=image_resolution,
+                architecture=architecture,
+                # sample=sample_size,
+                continue_model="cofly_{}_{}.pt".format(
+                    architecture, image_resolution[0]
+                ),
+            )
+            tr.train()

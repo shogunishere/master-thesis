@@ -120,7 +120,6 @@ class Inference:
                 # Get the image width and set the model to it
                 image = self.tensor_to_image(X)[0]
                 width = self.width_selection.get_image_width(image)
-                print(width)
                 self.width_selection_widths.append(width)
                 self.model.set_width(width)
                 self.width_distribution[width] += 1
