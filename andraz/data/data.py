@@ -38,9 +38,9 @@ class ImageImporter:
         only_test=False,
         augmentations=None,
     ):
-        assert dataset in ["agriadapt", "cofly", "infest"]
+        assert dataset in ["agriadapt", "cofly", "infest", "geok"]
         self._dataset = dataset
-        # Only take 10 images per set.
+        # Reduced number of random images in training if set.
         self.sample = sample
         # If True, return validation instead of testing set (where applicable)
         self.validation = validation
@@ -58,6 +58,8 @@ class ImageImporter:
             return self._get_cofly()
         elif self._dataset == "infest":
             return self._get_infest()
+        elif self._dataset == "geok":
+            return self._get_geok()
 
     def _get_agriadapt(self):
         """
@@ -89,7 +91,7 @@ class ImageImporter:
         Import images and their belonging segmentation masks (one-hot encoded).
         """
         images = sorted(
-            os.listdir(self.project_path / "/home/agriadapt/agriadapt/andraz/data/cofly/images/images/")
+            os.listdir(self.project_path / "andraz/data/cofly/images/images/")
         )
         random.seed(42069)
         idx = [x for x in range(len(images))]
@@ -109,7 +111,7 @@ class ImageImporter:
         for file_name in images:
             img = create_tensor(
                 Image.open(
-                    self.project_path / "/home/agriadapt/agriadapt/andraz/data/cofly/images/images/" / file_name
+                    self.project_path / "andraz/data/cofly/images/images/" / file_name
                 )
             )
             if self.smaller:
@@ -127,7 +129,7 @@ class ImageImporter:
 
             # Open the mask
             mask = Image.open(
-                self.project_path / "/home/agriadapt/agriadapt/andraz/data/cofly/labels/labels/" / file_name
+                self.project_path / "andraz/data/cofly/labels/labels/" / file_name
             )
             if self.smaller:
                 mask = smaller(mask)
@@ -159,7 +161,7 @@ class ImageImporter:
         for file_name in images:
             img = create_tensor(
                 Image.open(
-                    self.project_path / "/home/agriadapt/agriadapt/andraz/data/cofly/images/images/" / file_name
+                    self.project_path / "andraz/data/cofly/images/images/" / file_name
                 )
             )
             if self.smaller:
@@ -169,7 +171,7 @@ class ImageImporter:
 
             # Open the mask
             mask = Image.open(
-                self.project_path / "/home/agriadapt/agriadapt/andraz/data/cofly/labels/labels/" / file_name
+                self.project_path / "andraz/data/cofly/labels/labels/" / file_name
             )
             if self.smaller:
                 mask = smaller(mask)
@@ -216,37 +218,32 @@ class ImageImporter:
         mask[2] -> lettuce
         """
         if self.validation:
-            return self._fetch_infest_split("train"), self._fetch_infest_split("valid")
+            return self._fetch_infest_split(split="train"), self._fetch_infest_split(
+                split="valid"
+            )
         else:
             if self.only_test:
-                return None, self._fetch_infest_split("test")
+                return None, self._fetch_infest_split(split="test")
             else:
-                return self._fetch_infest_split("train"), self._fetch_infest_split(
-                    "test"
-                )
+                return self._fetch_infest_split(
+                    split="train"
+                ), self._fetch_infest_split(split="test")
 
-    def _fetch_infest_split(self, split="train"):
-        images = sorted(
-            os.listdir(
-                self.project_path
-                / "/home/agriadapt/agriadapt/andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
-                / split
-                / "images/"
-            )
-        )
+    def _fetch_infest_split(
+        self,
+        data_dir="andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
+        split="train",
+    ):
+        images = sorted(os.listdir(self.project_path / data_dir / split / "images/"))
         create_tensor = transforms.ToTensor()
         X, y = [], []
 
-        if self.sample:
-            images = images[:10]
+        if self.sample and split == "train":
+            images = random.sample(images, self.sample)
 
         for file_name in images:
             img = Image.open(
-                self.project_path
-                / "/home/agriadapt/agriadapt/andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
-                / split
-                / "images/"
-                / file_name
+                self.project_path / data_dir / split / "images/" / file_name
             )
             if self.smaller:
                 smaller = transforms.Resize(self.smaller)
@@ -255,11 +252,11 @@ class ImageImporter:
             X.append(tens)
             image_width = tens.shape[1]
             image_height = tens.shape[2]
-            # image_width = 640
-            # image_height = 640
 
             # Constructing the segmentation mask
             # We init the whole tensor as background
+            # TODO: if we do transfer learning from cofly, we need the background and weeds masks (no lettuce)
+            # That means that we have 1 as the first argument of zeros (as we only have weeds -- no lettuce)
             mask = cat(
                 (
                     ones(1, image_width, image_height),
@@ -268,19 +265,94 @@ class ImageImporter:
                 0,
             )
             # Then, label by label, add to other classes and remove from background.
+            file_name = file_name[:-3] + "txt"
             with open(
-                self.project_path
-                / "/home/agriadapt/agriadapt/andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/"
-                / split
-                / "labels/"
-                / file_name.replace("jpg", "txt")
+                self.project_path / data_dir / split / "labels/" / file_name
             ) as rows:
                 labels = [row.rstrip() for row in rows]
                 for label in labels:
                     class_id, pixels = self._yolov7_label(
                         label, image_width, image_height
                     )
+                    if class_id > 1:
+                        continue
+                    # TODO: another thing to keep in mind with transfer learning from cofly
                     # Change values based on received pixels
+                    print(class_id)
+                    for pixel in pixels:
+                        mask[0][pixel[0]][pixel[1]] = 0
+                        mask[class_id][pixel[0]][pixel[1]] = 1
+            y.append(mask)
+
+        return ImageDataset(X, y)
+
+    def _get_geok(self):
+        """
+        This takes the same approach as the infest dataset, but from a different directory.
+        mask[0] -> background
+        mask[1] -> weeds
+        mask[2] -> lettuce
+        """
+        data_dir = "andraz/data/geok/"
+        if self.validation:
+            return self._fetch_geok_split(
+                split="train", data_dir=data_dir
+            ), self._fetch_geok_split(split="valid", data_dir=data_dir)
+        else:
+            if self.only_test:
+                return None, self._fetch_geok_split(split="test", data_dir=data_dir)
+            else:
+                return self._fetch_geok_split(
+                    split="train", data_dir=data_dir
+                ), self._fetch_geok_split(split="test", data_dir=data_dir)
+
+    def _fetch_geok_split(
+        self,
+        data_dir="andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
+        split="train",
+    ):
+        images = sorted(os.listdir(self.project_path / data_dir / split / "images/"))
+        create_tensor = transforms.ToTensor()
+        X, y = [], []
+
+        if self.sample and split == "train":
+            images = random.sample(images, self.sample)
+
+        for file_name in images:
+            img = Image.open(
+                self.project_path / data_dir / split / "images/" / file_name
+            )
+            if self.smaller:
+                smaller = transforms.Resize(self.smaller)
+                img = smaller(img)
+            tens = create_tensor(img)
+            X.append(tens)
+            image_width = tens.shape[1]
+            image_height = tens.shape[2]
+
+            # Constructing the segmentation mask
+            # We init the whole tensor as background
+            # That means that we have 1 as the first argument of zeros (as we only have weeds -- no lettuce)
+            mask = cat(
+                (
+                    ones(1, image_width, image_height),
+                    zeros(1, image_width, image_height),
+                ),
+                0,
+            )
+            # Then, label by label, add to other classes and remove from background.
+            file_name = file_name[:-3] + "txt"
+            with open(
+                self.project_path / data_dir / split / "labels/" / file_name
+            ) as rows:
+                labels = [row.rstrip() for row in rows]
+                for label in labels:
+                    class_id, pixels = self._yolov7_label(
+                        label, image_width, image_height
+                    )
+                    if class_id == 1:
+                        continue
+                    class_id -= 1
                     for pixel in pixels:
                         mask[0][pixel[0]][pixel[1]] = 0
                         mask[class_id][pixel[0]][pixel[1]] = 1
@@ -318,17 +390,23 @@ class ImageImporter:
 
 
 if __name__ == "__main__":
-    ii = ImageImporter("cofly")
+    ii = ImageImporter("geok", smaller=(256, 256))
     train, test = ii.get_dataset()
     print(len(train))
     print(len(test))
 
-    X, y = next(iter(train))
-    x_mask = torch.tensor(torch.mul(X, 255), dtype=torch.uint8)
-    mask = torch.tensor(y[1:], dtype=torch.bool)
-    image = draw_segmentation_masks(x_mask, mask, colors=["yellow", "green"], alpha=0.5)
-    plt.imshow(image.permute(1, 2, 0))
-    plt.show()
+    for X, y in iter(train):
+        # X, y = next(iter(train))
+        x_mask = torch.tensor(torch.mul(X, 255), dtype=torch.uint8)
+        lettuce_mask = torch.tensor(y, dtype=torch.bool)
+        image = draw_segmentation_masks(
+            x_mask,
+            lettuce_mask,
+            colors=["green", "red"],
+            alpha=0.5,
+        )
+        plt.imshow(image.permute(1, 2, 0))
+        plt.show()
 
     # ii = ImageImporter("cofly")
     # train, test = ii.get_dataset()

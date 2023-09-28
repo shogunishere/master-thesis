@@ -290,10 +290,12 @@ andraz/local_settings.py
 andraz/sandbox.py
 andraz/data/agriadapt/
 andraz/data/cofly/
+andraz/data/geok/
 andraz/training/wandb/
 andraz/training/garage/infest/
 andraz/evaluation/plots/
 andraz/output/
+andraz/training/garage/
 # End of Andraz custom entries
 
 # Demo custom entries

@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -45,6 +46,8 @@ class Training:
         verbose=1,
         wandb_group=None,
         dataset="infest",
+        continue_model="",  # This is set to model name that we want to continue training with (fresh training if "")
+        sample=0,
     ):
         self.architecture = architecture
         self.device = device
@@ -59,6 +62,8 @@ class Training:
         self.verbose = verbose
         self.wandb_group = wandb_group
         self.dataset = dataset
+        self.continue_model = continue_model
+        self.sample = sample
 
     def _report_settings(self):
         print("=======================================")
@@ -167,7 +172,10 @@ class Training:
             self._report_settings()
         # Prepare the data for training and validation
         ii = ImageImporter(
-            self.dataset, validation=False, sample=False, smaller=self.image_resolution
+            self.dataset,
+            validation=False,
+            sample=self.sample,
+            smaller=self.image_resolution,
         )
         train, validation = ii.get_dataset()
         if self.verbose:
@@ -197,7 +205,7 @@ class Training:
                 },
             )
             wname = run.name.split("-")
-            garage_path = "garage/infest/{} {} {}/".format(
+            garage_path = "garage/{} {} {}/".format(
                 wname[2].zfill(4), wname[0], wname[1]
             )
             os.mkdir(garage_path)
@@ -212,29 +220,25 @@ class Training:
 
         # Prepare the model
         out_channels = len(settings.LOSS_WEIGHTS)
-        if self.architecture == "slim":
-            model = SlimUNet(out_channels)
-        elif self.architecture == "squeeze":
-            model = SlimSqueezeUNet(out_channels)
-            if self.dataset == "cofly":
-                model = SlimSqueezeUNetCofly(out_channels)
-            # model = SlimPrunedSqueezeUNet(in_channels, dropout=self.dropout)
+        if not self.continue_model:
+            if self.architecture == "slim":
+                model = SlimUNet(out_channels)
+            elif self.architecture == "squeeze":
+                model = SlimSqueezeUNet(out_channels)
+                if self.dataset == "cofly":
+                    model = SlimSqueezeUNetCofly(out_channels)
+                # model = SlimPrunedSqueezeUNet(in_channels, dropout=self.dropout)
+            else:
+                raise ValueError("Unknown model architecture.")
         else:
-            raise ValueError("Unknown model architecture.")
+            model = torch.load(
+                Path(settings.PROJECT_DIR)
+                / "andraz/training/garage/"
+                / self.continue_model
+            )
+
         # summary(model, input_size=(in_channels, 128, 128))
         model.to(self.device)
-
-        # # Reporting from slimmable networks
-        # X, _ = next(iter(train_loader))
-        # X = X.to(self.device)
-        # for width in settings.WIDTHS[-1:]:
-        #     # Report on flops/parameters of the model
-        #     print()
-        #     model.set_width(width)
-        #     model_profiling(model, X)
-        #     print()
-        # All other rando packages found online
-        # self._report_model(model, X, train_loader)
 
         # Prepare the optimiser
         optimizer = Adam(
@@ -311,9 +315,7 @@ class Training:
                 )
 
             metrics.report_wandb(wandb)
-            torch.save(
-                model, garage_path + "slim_model_{}.pt".format(str(epoch).zfill(4))
-            )
+            torch.save(model, garage_path + "model_{}.pt".format(str(epoch).zfill(4)))
             if self.verbose and epoch % 10 == 0:
                 print(
                     "Epoch {} completed. Running time: {}".format(
@@ -323,13 +325,27 @@ class Training:
 
         if settings.WANDB:
             wandb.finish()
-        torch.save(model, garage_path + "slim_model.pt".format(epoch))
+        torch.save(model, garage_path + "model.pt".format(epoch))
 
 
 if __name__ == "__main__":
     # Train on GPU if available
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-    tr = Training(device, dataset="cofly")
-    # tr = Training(device, dataset="infest")
+    # tr = Training(device, dataset="cofly")
+    # for sample_size in [10, 25, 50, 100]:
+    tr = Training(
+        device,
+        dataset="geok",
+        # sample=sample_size,
+        # continue_model="cofly_transfer_256.pt",
+    )
     tr.train()
+    #
+    # tr = Training(
+    #     device,
+    #     dataset="infest",
+    #     # sample=sample_size,
+    #     continue_model="cofly_transfer_256.pt",
+    # )
+    # tr.train()
