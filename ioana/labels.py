@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import torch
@@ -18,18 +19,33 @@ METRICS = {"precision": BinaryPrecision}
 
 
 class Labels:
-    def __init__(self, model, metrics=None, image_resolution=None):
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.model_name = model.split(".")[0]
-        self.model = self._load_model(model)
+    def __init__(
+        self, dataset, image_resolution, model_architecture="slim", metrics=None
+    ):
+        assert dataset in ["cofly", "geok"]
+        self.dataset = dataset
+        assert image_resolution in [128, 256, 512]
+        self.image_resolution = image_resolution
+        assert model_architecture in ["slim", "squeeze"]
+        self.model_architecture = model_architecture
+        self.garage_dir = (
+            Path(settings.PROJECT_DIR)
+            / "ioana/garage/"
+            / f"{self.dataset}_{self.model_architecture}_{self.image_resolution}"
+        )
+        if not os.path.exists(self.garage_dir):
+            os.makedirs(self.garage_dir)
+        self.model = torch.load(
+            Path(settings.PROJECT_DIR)
+            / "andraz/training/garage"
+            / f"{self.dataset}_{self.model_architecture}_{self.image_resolution}.pt"
+        )
         self.model.eval()
-        self.image_resolution = image_resolution
-        self.image_resolution = image_resolution
+
         self.train, self.test = self._load_data()
-        self.train_features, self.test_features = self._load_features()
-        self.train_loader, self.test_loader = self._filter_data()
         self.metrics = METRICS if metrics is None else metrics
 
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.results = {
             "train": {
                 width: {
@@ -45,37 +61,19 @@ class Labels:
             },
         }
 
-    @staticmethod
-    def _load_model(model):
-        return torch.load(Path(settings.PROJECT_DIR) / "andraz/training/garage" / model)
-
     def _load_data(self):
         ii = ImageImporter(
-            "cofly",
-            only_test=False,
-            smaller=self.image_resolution,
+            self.dataset,
+            smaller=(self.image_resolution, self.image_resolution),
+            validation=True,
         )
         train, test = ii.get_dataset()
 
         return train, test
 
-    def _load_features(self):
-        train_features = pd.read_pickle(
-            Path(settings.PROJECT_DIR) / "ioana/train_features.pickle"
-        )
-        test_features = pd.read_pickle(
-            Path(settings.PROJECT_DIR) / "ioana/test_features.pickle"
-        )
-
-        return train_features, test_features
-
     def _filter_data(self):
-        train_features = pd.read_pickle(
-            Path(settings.PROJECT_DIR) / "ioana/train_features.pickle"
-        )
-        test_features = pd.read_pickle(
-            Path(settings.PROJECT_DIR) / "ioana/test_features.pickle"
-        )
+        train_features = pd.read_pickle(self.garage_dir / "train_features.pickle")
+        test_features = pd.read_pickle(self.garage_dir / "test_features.pickle")
         train_indices = train_features["index"].tolist()
         test_indices = test_features["index"].tolist()
         filtered_train = []
@@ -91,10 +89,9 @@ class Labels:
                 sample = self.test[elem]
                 filtered_test.append(sample)
 
-        train_data_loader = DataLoader(filtered_train, batch_size=1, shuffle=False)
-        test_data_loader = DataLoader(filtered_test, batch_size=1, shuffle=False)
-
-        return train_data_loader, test_data_loader
+        return DataLoader(filtered_train, batch_size=1, shuffle=False), DataLoader(
+            filtered_test, batch_size=1, shuffle=False
+        )
 
     def _infer(self, width):
         with torch.no_grad():
@@ -144,16 +141,14 @@ class Labels:
     def _compute_labels(
         self, width, precision_list_train, precision_list_test, save_df=False
     ):
-        train_features = pd.read_pickle(
-            Path(settings.PROJECT_DIR) / "ioana/train_features.pickle"
-        )
-        test_features = pd.read_pickle(
-            Path(settings.PROJECT_DIR) / "ioana/test_features.pickle"
-        )
-        mean = float(self._calculate_precision_mean(precision_list_train, width))
-        for features, precisions_list in [
-            (train_features, precision_list_train),
-            (test_features, precision_list_test),
+        train_features = pd.read_pickle(self.garage_dir / "train_features.pickle")
+        test_features = pd.read_pickle(self.garage_dir / "test_features.pickle")
+        # TODO: I (Andraž) changed this to calculate two separate means (otherwise we run out of samples in the test set)
+        train_mean = float(self._calculate_precision_mean(precision_list_train, width))
+        test_mean = float(self._calculate_precision_mean(precision_list_test, width))
+        for features, precisions_list, mean in [
+            (train_features, precision_list_train, train_mean),
+            (test_features, precision_list_test, test_mean),
         ]:
             label_column = f"label_{width}"
             index_list = features.index.tolist()
@@ -180,11 +175,166 @@ class Labels:
 
         return train_features, test_features
 
-    def run(self):
+    def _generate_features(self):
+        train_features, test_features = [], []
+        train_images = ImageImporter.tensor_to_image(self.train.X)
+        test_images = ImageImporter.tensor_to_image(self.test.X)
+        image_lists = [train_images, test_images]
+        column_headers = [
+            "index",
+            "mean_brightness",
+            "std_brightness",
+            "max_brightness",
+            "min_brightness",
+            "no_bins",
+            "contrast_hue_hist",
+            "std_hue_arc",
+            "contrast",
+            "mean_saturation",
+            "std_saturation",
+            "max_saturation",
+            "min_saturation",
+            "keypoints",
+            "ExG_ExR",
+            "CIVE_index",
+            "glcm_contrast_1",
+            "glcm_contrast_2",
+            "glcm_contrast_3",
+            "glcm_contrast_4",
+            "glcm_correlation_1",
+            "glcm_correlation_2",
+            "glcm_correlation_3",
+            "glcm_correlation_4",
+            "glcm_dissimilarity_1",
+            "glcm_dissimilarity_2",
+            "glcm_dissimilarity_3",
+            "glcm_dissimilarity_4",
+            "glcm_asm_1",
+            "glcm_asm_2",
+            "glcm_asm_3",
+            "glcm_asm_4",
+            "glcm_energy_1",
+            "glcm_energy_2",
+            "glcm_energy_3",
+            "glcm_energy_4",
+            "glcm_homogeneity_1",
+            "glcm_homogeneity_2",
+            "glcm_homogeneity_3",
+            "glcm_homogeneity_4",
+        ]
+
+        for list_index, image_list in enumerate(image_lists):
+            list_of_dictionaries = []
+            for i, image in enumerate(image_list):
+                spectral_features = SpectralFeatures(image)
+                texture_features = TextureFeatures(image)
+                vegetation_index = VegetationIndices(image)
+
+                # color features
+                (
+                    mean_brightness,
+                    std_brightness,
+                    max_brightness,
+                    min_brightness,
+                ) = spectral_features.compute_brightness()
+                (
+                    no_bins,
+                    contrast_hue_hist,
+                    std_hue_arc,
+                ) = spectral_features.compute_hue_histogram()
+                contrast = spectral_features.compute_contrast()
+                (
+                    mean_saturation,
+                    std_saturation,
+                    max_saturation,
+                    min_saturation,
+                ) = spectral_features.compute_saturation()
+                keypoints = spectral_features.compute_sift_feats()
+
+                # vegetation indices
+                ExG = vegetation_index.excess_green_index()
+                ExR = vegetation_index.excess_red_index()
+                ExG_ExR_img = vegetation_index.excess_green_excess_red_index(ExG, ExR)
+                CIVE_index = vegetation_index.colour_index_vegetation_extraction()
+                binary_CIVE_image = vegetation_index.visualization_CIVE_Otsu_threshold(
+                    CIVE_index
+                )
+
+                # texture features
+                glcm_matrix = texture_features.compute_glcm()
+                glcm_contrast = np.ravel(texture_features.contrast_feature(glcm_matrix))
+                glcm_dissimilarity = np.ravel(
+                    texture_features.dissimilarity_feature(glcm_matrix)
+                )
+                glcm_homogeneity = np.ravel(
+                    texture_features.homogeneity_feature(glcm_matrix)
+                )
+                glcm_energy = np.ravel(texture_features.energy_feature(glcm_matrix))
+                glcm_correlation = np.ravel(
+                    texture_features.correlation_feature(glcm_matrix)
+                )
+                glcm_asm = np.ravel(texture_features.asm_feature(glcm_matrix))
+
+                features_dictionary = {
+                    "index": i,
+                    "mean_brightness": mean_brightness,
+                    "std_brightness": std_brightness,
+                    "max_brightness": max_brightness,
+                    "min_brightness": min_brightness,
+                    "no_bins": no_bins,
+                    "contrast_hue_hist": contrast_hue_hist,
+                    "std_hue_arc": std_hue_arc,
+                    "contrast": contrast,
+                    "mean_saturation": mean_saturation,
+                    "std_saturation": std_saturation,
+                    "max_saturation": max_saturation,
+                    "min_saturation": min_saturation,
+                    "keypoints": keypoints,
+                    "ExG_ExR": ExG_ExR_img,
+                    "CIVE_index": float(binary_CIVE_image),
+                    "glcm_contrast_1": glcm_contrast[0],
+                    "glcm_contrast_2": glcm_contrast[1],
+                    "glcm_contrast_3": glcm_contrast[2],
+                    "glcm_contrast_4": glcm_contrast[3],
+                    "glcm_correlation_1": glcm_correlation[0],
+                    "glcm_correlation_2": glcm_correlation[1],
+                    "glcm_correlation_3": glcm_correlation[2],
+                    "glcm_correlation_4": glcm_correlation[3],
+                    "glcm_dissimilarity_1": glcm_dissimilarity[0],
+                    "glcm_dissimilarity_2": glcm_dissimilarity[1],
+                    "glcm_dissimilarity_3": glcm_dissimilarity[2],
+                    "glcm_dissimilarity_4": glcm_dissimilarity[3],
+                    "glcm_asm_1": glcm_asm[0],
+                    "glcm_asm_2": glcm_asm[1],
+                    "glcm_asm_3": glcm_asm[2],
+                    "glcm_asm_4": glcm_asm[3],
+                    "glcm_energy_1": glcm_energy[0],
+                    "glcm_energy_2": glcm_energy[1],
+                    "glcm_energy_3": glcm_energy[2],
+                    "glcm_energy_4": glcm_energy[3],
+                    "glcm_homogeneity_1": glcm_homogeneity[0],
+                    "glcm_homogeneity_2": glcm_homogeneity[1],
+                    "glcm_homogeneity_3": glcm_homogeneity[2],
+                    "glcm_homogeneity_4": glcm_homogeneity[3],
+                }
+                list_of_dictionaries.append(features_dictionary)
+
+            if list_index == 0:
+                train_features = pd.DataFrame(
+                    list_of_dictionaries, columns=column_headers, index=None
+                )
+            else:
+                test_features = pd.DataFrame(
+                    list_of_dictionaries, columns=column_headers, index=None
+                )
+
+        train_features.to_pickle(self.garage_dir / "train_features.pickle")
+        test_features.to_pickle(self.garage_dir / "test_features.pickle")
+
+    def _generate_knns(self):
         models = {}
         scalers = {}
-        # self._load_data()
-        for width, no_neighbors in settings.KNN_WIDTHS.items():
+        for width, no_neighbours in settings.KNN_WIDTHS.items():
             self.train_loader, self.test_loader = self._filter_data()
             precision_list_train, precision_list_test = self._infer(width)
             train_dataframe, test_dataframe = self._compute_labels(
@@ -192,12 +342,20 @@ class Labels:
             )
 
             knn_model = KnnPrediction(
-                width, train_dataframe, test_dataframe, no_neighbors
+                width,
+                train_dataframe,
+                test_dataframe,
+                no_neighbours,
+                garage_dir=Path(settings.PROJECT_DIR) / "ioana" / self.garage_dir,
             )
             X_train, y_train, X_test, y_test = knn_model.load_data()
             X_train, X_test, scaler = knn_model.scale_data(X_train, X_test)
-            y_pred = knn_model.fit_model(
-                X_train, y_train, X_test, y_test, save_model=True
+            knn_model.fit_model(
+                X_train,
+                y_train,
+                X_test,
+                y_test,
+                save_model=True,
             )
 
             # finally, drop the lines that have label 1 in train_dataframe
@@ -212,182 +370,18 @@ class Labels:
             test_dataframe = test_dataframe.drop([f"label_{width}"], axis=1)
 
             self.train_features = train_dataframe
-            self.train_features.to_pickle(
-                Path(settings.PROJECT_DIR) / f"ioana/train_features.pickle"
-            )
+            self.train_features.to_pickle(self.garage_dir / "train_features.pickle")
             self.test_features = test_dataframe
-            self.test_features.to_pickle(
-                Path(settings.PROJECT_DIR) / f"ioana/test_features.pickle"
-            )
+            self.test_features.to_pickle(self.garage_dir / "test_features.pickle")
             models[width] = knn_model.model
             scalers[width] = scaler
         return models, scalers
 
+    def run(self):
+        self._generate_features()
+        self._generate_knns()
+
 
 if __name__ == "__main__":
-    train_features, test_features = [], []
-    ii = ImageImporter("cofly")
-    train, test = ii.get_dataset()
-    train_images = ii.tensor_to_image(train.X)
-    test_images = ii.tensor_to_image(test.X)
-    image_lists = [train_images, test_images]
-    column_headers = [
-        "index",
-        "mean_brightness",
-        "std_brightness",
-        "max_brightness",
-        "min_brightness",
-        "no_bins",
-        "contrast_hue_hist",
-        "std_hue_arc",
-        "contrast",
-        "mean_saturation",
-        "std_saturation",
-        "max_saturation",
-        "min_saturation",
-        "keypoints",
-        "ExG_ExR",
-        "CIVE_index",
-        "glcm_contrast_1",
-        "glcm_contrast_2",
-        "glcm_contrast_3",
-        "glcm_contrast_4",
-        "glcm_correlation_1",
-        "glcm_correlation_2",
-        "glcm_correlation_3",
-        "glcm_correlation_4",
-        "glcm_dissimilarity_1",
-        "glcm_dissimilarity_2",
-        "glcm_dissimilarity_3",
-        "glcm_dissimilarity_4",
-        "glcm_asm_1",
-        "glcm_asm_2",
-        "glcm_asm_3",
-        "glcm_asm_4",
-        "glcm_energy_1",
-        "glcm_energy_2",
-        "glcm_energy_3",
-        "glcm_energy_4",
-        "glcm_homogeneity_1",
-        "glcm_homogeneity_2",
-        "glcm_homogeneity_3",
-        "glcm_homogeneity_4",
-    ]
-
-    for list_index, image_list in enumerate(image_lists):
-        list_of_dictionaries = []
-        for i, image in enumerate(image_list):
-            spectral_features = SpectralFeatures(image)
-            texture_features = TextureFeatures(image)
-            vegetation_index = VegetationIndices(image)
-
-            # color features
-            (
-                mean_brightness,
-                std_brightness,
-                max_brightness,
-                min_brightness,
-            ) = spectral_features.compute_brightness()
-            (
-                no_bins,
-                contrast_hue_hist,
-                std_hue_arc,
-            ) = spectral_features.compute_hue_histogram()
-            contrast = spectral_features.compute_contrast()
-            (
-                mean_saturation,
-                std_saturation,
-                max_saturation,
-                min_saturation,
-            ) = spectral_features.compute_saturation()
-            keypoints = spectral_features.compute_sift_feats()
-
-            # vegetation indices
-            ExG = vegetation_index.excess_green_index()
-            ExR = vegetation_index.excess_red_index()
-            ExG_ExR_img = vegetation_index.excess_green_excess_red_index(ExG, ExR)
-            CIVE_index = vegetation_index.colour_index_vegetation_extraction()
-            binary_CIVE_image = vegetation_index.visualization_CIVE_Otsu_threshold(
-                CIVE_index
-            )
-
-            # texture features
-            glcm_matrix = texture_features.compute_glcm()
-            glcm_contrast = np.ravel(texture_features.contrast_feature(glcm_matrix))
-            glcm_dissimilarity = np.ravel(
-                texture_features.dissimilarity_feature(glcm_matrix)
-            )
-            glcm_homogeneity = np.ravel(
-                texture_features.homogeneity_feature(glcm_matrix)
-            )
-            glcm_energy = np.ravel(texture_features.energy_feature(glcm_matrix))
-            glcm_correlation = np.ravel(
-                texture_features.correlation_feature(glcm_matrix)
-            )
-            glcm_asm = np.ravel(texture_features.asm_feature(glcm_matrix))
-
-            features_dictionary = {
-                "index": i,
-                "mean_brightness": mean_brightness,
-                "std_brightness": std_brightness,
-                "max_brightness": max_brightness,
-                "min_brightness": min_brightness,
-                "no_bins": no_bins,
-                "contrast_hue_hist": contrast_hue_hist,
-                "std_hue_arc": std_hue_arc,
-                "contrast": contrast,
-                "mean_saturation": mean_saturation,
-                "std_saturation": std_saturation,
-                "max_saturation": max_saturation,
-                "min_saturation": min_saturation,
-                "keypoints": keypoints,
-                "ExG_ExR": ExG_ExR_img,
-                "CIVE_index": float(binary_CIVE_image),
-                "glcm_contrast_1": glcm_contrast[0],
-                "glcm_contrast_2": glcm_contrast[1],
-                "glcm_contrast_3": glcm_contrast[2],
-                "glcm_contrast_4": glcm_contrast[3],
-                "glcm_correlation_1": glcm_correlation[0],
-                "glcm_correlation_2": glcm_correlation[1],
-                "glcm_correlation_3": glcm_correlation[2],
-                "glcm_correlation_4": glcm_correlation[3],
-                "glcm_dissimilarity_1": glcm_dissimilarity[0],
-                "glcm_dissimilarity_2": glcm_dissimilarity[1],
-                "glcm_dissimilarity_3": glcm_dissimilarity[2],
-                "glcm_dissimilarity_4": glcm_dissimilarity[3],
-                "glcm_asm_1": glcm_asm[0],
-                "glcm_asm_2": glcm_asm[1],
-                "glcm_asm_3": glcm_asm[2],
-                "glcm_asm_4": glcm_asm[3],
-                "glcm_energy_1": glcm_energy[0],
-                "glcm_energy_2": glcm_energy[1],
-                "glcm_energy_3": glcm_energy[2],
-                "glcm_energy_4": glcm_energy[3],
-                "glcm_homogeneity_1": glcm_homogeneity[0],
-                "glcm_homogeneity_2": glcm_homogeneity[1],
-                "glcm_homogeneity_3": glcm_homogeneity[2],
-                "glcm_homogeneity_4": glcm_homogeneity[3],
-            }
-
-            list_of_dictionaries.append(features_dictionary)
-
-        if list_index == 0:
-            train_features = pd.DataFrame(
-                list_of_dictionaries, columns=column_headers, index=None
-            )
-        else:
-            test_features = pd.DataFrame(
-                list_of_dictionaries, columns=column_headers, index=None
-            )
-
-    file_name = Path(settings.PROJECT_DIR) / "ioana/train_features.pickle"
-    train_features.to_pickle(file_name)
-    print(f"Training features saved to {file_name}")
-
-    file_name = Path(settings.PROJECT_DIR) / "ioana/test_features.pickle"
-    test_features.to_pickle(file_name)
-    print(f"Testing features saved to {file_name}")
-
-    # Comment lines 290-391 for complete, non-filtered features dataframes
-    labels = Labels("geok_slim_128_trans.pt")
+    labels = Labels("geok", 128, "slim")
     labels.run()

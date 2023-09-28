@@ -186,7 +186,8 @@ class ImageImporter:
 
         return ImageDataset(X, y)
 
-    def tensor_to_image(self, tensor_images):
+    @staticmethod
+    def tensor_to_image(tensor_images):
         images = []
         for elem in tensor_images:
             elem = (elem.numpy() * 255).astype(np.uint8)

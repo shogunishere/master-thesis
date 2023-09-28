@@ -20,22 +20,19 @@ warnings.filterwarnings(
 
 
 class AdaptiveWidth:
-    def __init__(self, train_feature_file="ioana/train_features.pickle"):
-        self.train_feature_file = train_feature_file
+    def __init__(self, garage_dir):
 
         # Initialise the scaler for image scaling
-        train_features = pd.read_pickle(
-            Path(settings.PROJECT_DIR) / self.train_feature_file
-        ).drop(["index"], axis="columns")
+        train_features = pd.read_pickle(garage_dir / "train_features.pickle").drop(
+            ["index"], axis="columns"
+        )
         self.scaler = MinMaxScaler()
         self.scaler.fit(train_features)
 
         # Load the models used to predict the width
         self.models = {}
         for width in settings.WIDTHS[0:-1]:
-            self.models[width] = joblib.load(
-                Path(settings.PROJECT_DIR) / "ioana/knn_{}.pickle".format(width)
-            )
+            self.models[width] = joblib.load(garage_dir / f"knn_{width}.pickle")
 
     def _calculate_image_features(self, image):
         """

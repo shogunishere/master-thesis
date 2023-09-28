@@ -15,12 +15,15 @@ from sklearn.metrics import (
 
 
 class KnnPrediction:
-    def __init__(self, width, train_dataframe, test_dataframe, k_neighbors):
+    def __init__(
+        self, width, train_dataframe, test_dataframe, k_neighbours, garage_dir=""
+    ):
         self.model = None
         self.width = width
         self.train_data = train_dataframe
         self.test_data = test_dataframe
-        self.k_neightbors = k_neighbors
+        self.k_neighbours = k_neighbours
+        self.garage_dir = garage_dir
 
     def load_data(self):
         y_train = self.train_data[f"label_{self.width}"]
@@ -46,13 +49,19 @@ class KnnPrediction:
         return scaled_X_train, scaled_X_test, scaler
 
     def fit_model(
-        self, X_train, y_train, X_test, y_test, save_model=False, metrics=False
+        self,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        save_model=False,
+        metrics=False,
     ):
-        knn = KNeighborsClassifier(n_neighbors=self.k_neightbors)
+        knn = KNeighborsClassifier(n_neighbors=self.k_neighbours)
         knn.fit(X_train, y_train)
         self.model = knn
         if save_model:
-            save_model = open(f"knn_{self.width}.pickle", "wb")
+            save_model = open(self.garage_dir / f"knn_{self.width}.pickle", "wb")
             pickle.dump(knn, save_model)
             save_model.close()
             print(f"KNN model for {self.width} saved to file")
@@ -68,11 +77,13 @@ class KnnPrediction:
                 knn = KNeighborsClassifier(n_neighbors=i)
                 knn.fit(X_train, y_train)
                 y_pred = knn.predict(X_test)
-                f1_scores.append(f1_score(y_test, y_pred, average='weighted'))
+                f1_scores.append(f1_score(y_test, y_pred, average="weighted"))
                 matthews_coeff_scores.append(matthews_corrcoef(y_test, y_pred))
                 precision_scores.append(precision_score(y_test, y_pred))
                 accuracy_scores.append(accuracy_score(y_test, y_pred))
-                print(f"Classification Report for width {self.width} for {i} number of neightbors \n {classification_report(y_test, y_pred)}")
+                print(
+                    f"Classification Report for width {self.width} for {i} number of neightbors \n {classification_report(y_test, y_pred)}"
+                )
 
             plt.figure(figsize=(15, 6))
             plt.plot(

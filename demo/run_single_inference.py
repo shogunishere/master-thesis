@@ -174,7 +174,7 @@ class SingleImageInference:
 
 if __name__ == "__main__":
     # Run this once to download the new dataset
-    setup_env()
+    # setup_env()
 
     si = SingleImageInference(
         # geok (new dataset) or infest (forbidden dataset)

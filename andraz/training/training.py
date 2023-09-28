@@ -344,7 +344,7 @@ if __name__ == "__main__":
     # We need to train the new geok models of different sizes with and without transfer learning from cofly dataset
     # We do this for both sunet and ssunet
     for architecture in ["slim", "squeeze"]:
-        for image_resolution in [(256, 256), (512, 512)]:
+        for image_resolution in [(512, 512)]:
             tr = Training(
                 device,
                 dataset="geok",

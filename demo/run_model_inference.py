@@ -58,7 +58,7 @@ class Inference:
         }
         self.width_distribution = {x: 0 for x in settings.WIDTHS}
         self.width_selection = AdaptiveWidth(
-            train_feature_file="ioana/train_features.pickle"
+            garage_dir=Path(settings.PROJECT_DIR) / "ioana/garage" / self.model_name
         )
         self.width_selection_widths = []
         self.tensor_to_image = ImageImporter("cofly").tensor_to_image
@@ -323,7 +323,7 @@ class Comparator:
             infer = Inference(
                 model,
                 image_resolution=(size, size),
-                create_images=False,
+                create_images=True,
                 dataset="geok",
             )
             infer.run()
@@ -359,23 +359,11 @@ class Comparator:
 
 
 if __name__ == "__main__":
-    # Download the Cofly dataset and place it in a proper directory.
+    # Download the geok dataset and place it in a proper directory.
     # You only have to do this the first time, afterwards the data is ready to go.
     # setup_env()
 
-    # infer = Inference(
-    #     "transfer_infest_100_256.pt",
-    #     image_resolution=(256, 256),
-    #     create_images=True,
-    #     dataset="infest",
-    # )
-    # infer.run()
-
-    # A tuple of model name and image input size
-    # models = [("cofly_slim_{}.pt".format(size), size) for size in [128, 256, 512]] + [
-    #     ("cofly_squeeze_{}.pt".format(size), size) for size in [128, 256, 512]
-    # ]
-    models = [("geok_slim_128.pt", 128), ("geok_slim_128_trans.pt", 128)]
+    models = [("geok_slim_128.pt", 128)]
     comparator = Comparator(models)
 
     # Run inference for multiple models and display comparative tables
