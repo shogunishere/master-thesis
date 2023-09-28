@@ -16,31 +16,36 @@ def setup_env(data=True, models=True):
         # setup_folder(
         #     "https://drive.google.com/file/d/1w2jbor9QR3iUQ0V1pphsmNHw4ZZdgf_f/view?usp=share_link",
         #     project_dir
-        #     / "data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
+        #     / "andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/",
         # )
         # Cofly
+        # setup_folder(
+        #     "https://drive.google.com/file/d/1GJpML5gFrBO0LZ5rGTOkaJUv8474sJOm/view?usp=sharing",
+        #     project_dir / "andraz/data/cofly/",
+        # )
+        # Geok
         setup_folder(
-            "https://drive.google.com/file/d/1GJpML5gFrBO0LZ5rGTOkaJUv8474sJOm/view?usp=sharing",
-            project_dir / "data/cofly/",
+            "https://drive.google.com/file/d/1bXuFyBnpoP2sUD5-e7lqAl4bnVN1WV5H/view?usp=sharing",
+            project_dir / "andraz/data/geok/",
         )
 
     # Download the models (are now just uploaded to git for convenience)
     if models:
         # setup_folder(
         #     "https://drive.google.com/file/d/1F8wtjxjESxWRomzAxuR43tJ2bOptTMfT/view?usp=share_link",
-        #     project_dir / "training/garage/",
+        #     project_dir / "andraz/training/garage/",
         # )
         # setup_folder(
         #     "https://drive.google.com/file/d/1252exvJsH_ljJafm7qbQzXld3S1rxmuY/view?usp=sharing",
-        #     project_dir / "training/garage/",
+        #     project_dir / "andraz/training/garage/",
         # )
         # setup_folder(
         #     "https://drive.google.com/file/d/1RFT-lvGjsLyJXNnJic8bw_OMmDqrycno/view?usp=sharing",
-        #     project_dir / "training/garage/",
+        #     project_dir / "andraz/training/garage/",
         # )
         # setup_folder(
         #     "https://drive.google.com/file/d/1sfQ-rpP8EZnBLLbKF6hIBDyfAxcga-Dw/view?usp=sharing",
-        #     project_dir / "training/garage/",
+        #     project_dir / "andraz/training/garage/",
         # )
         pass
 

@@ -11,6 +11,7 @@ from torchvision.utils import draw_segmentation_masks
 
 from andraz import settings
 from andraz.data.data import ImageImporter
+from andraz.helpers.drive_fetch import setup_env
 from ioana.inference import AdaptiveWidth
 
 
@@ -172,6 +173,9 @@ class SingleImageInference:
 
 
 if __name__ == "__main__":
+    # Run this once to download the new dataset
+    setup_env()
+
     si = SingleImageInference(
         # geok (new dataset) or infest (forbidden dataset)
         dataset="geok",
