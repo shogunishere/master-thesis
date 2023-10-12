@@ -299,6 +299,8 @@ class ImageImporter:
             return self._fetch_geok_split(
                 split="train", data_dir=data_dir
             ), self._fetch_geok_split(split="valid", data_dir=data_dir)
+        if self.only_test:
+            return None, self._fetch_geok_split(split="valid", data_dir=data_dir)
         else:
             if self.only_test:
                 return None, self._fetch_geok_split(split="test", data_dir=data_dir)

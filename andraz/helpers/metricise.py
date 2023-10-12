@@ -14,6 +14,7 @@ class Metricise:
         self.names = metrics
         self.metrics = None
         self.reset_metrics()
+        self.device = "cuda:0"
 
     def _aggregate_metrics(self):
         remove_list = []
@@ -41,10 +42,14 @@ class Metricise:
         for i in range(y.shape[0]):
             for j in range(y.shape[1]):
                 self.metrics["Jaccard/{}/{}".format(name, classes[j])].append(
-                    self._jaccard(y[i][j], y_pred[i][j])
+                    settings.METRICS["iou"](validate_args=False)
+                    .to(self.device)(y[i][j], y_pred[i][j])
+                    .cpu()
                 )
 
-    def add_precision_old(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
+    def add_precision_old_old(
+        self, y, y_pred, name, classes=["back", "weeds", "lettuce"]
+    ):
         # Iterate through the batch of data
         for i in range(y.shape[0]):
             # Iterate through classes
@@ -71,11 +76,20 @@ class Metricise:
                         )
                     )
 
-    def add_precision(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
+    def add_precision_old(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
         precision_calculation = BinaryPrecision(validate_args=False).to("cuda:0")
         for j in range(y.shape[1]):
             result = float(precision_calculation(y[:, j], y_pred[:, j]).cpu())
             self.metrics["Precision/{}/{}".format(name, classes[j])].append(result)
+
+    def add_precision(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
+        for i in range(y.shape[0]):
+            for j in range(y.shape[1]):
+                self.metrics["Precision/{}/{}".format(name, classes[j])].append(
+                    settings.METRICS["precision"](validate_args=False)
+                    .to(self.device)(y[i][j], y_pred[i][j])
+                    .cpu()
+                )
 
     def add_image(self, X, y, y_pred, epoch):
         y = torch.argmax(y, dim=1)
@@ -123,7 +137,7 @@ class Metricise:
     # Wandb handling
     def report(self, wandb, epoch=-1):
         self._aggregate_metrics()
-        if settings.WANDB:
+        if wandb and settings.WANDB:
             wandb.log(self.metrics)
         metrics = self.metrics
         self.reset_metrics()

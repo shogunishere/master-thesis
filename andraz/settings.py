@@ -1,3 +1,10 @@
+from torchmetrics.classification import (
+    BinaryJaccardIndex,
+    BinaryPrecision,
+    BinaryRecall,
+    BinaryF1Score,
+)
+
 try:
     from andraz.local_settings import *
 except:
@@ -15,8 +22,8 @@ BATCH_SIZE = 2**1
 # BATCH_SIZE = 2**6
 # BATCH_SIZE = 2**7
 # BATCH_SIZE = 2**8
-EPOCHS = 1000
-# EPOCHS = 150
+# EPOCHS = 1000
+EPOCHS = 150
 
 LEARNING_RATE = 0.0001
 # LEARNING_RATE = 0.001
@@ -53,6 +60,12 @@ KNN_WIDTHS = {
 # Cofly loss weights
 LOSS_WEIGHTS = [0.1, 0.9]
 
+METRICS = {
+    "iou": BinaryJaccardIndex,
+    "precision": BinaryPrecision,
+    "recall": BinaryRecall,
+    "f1score": BinaryF1Score,
+}
 
 try:
     from andraz.local_settings import *

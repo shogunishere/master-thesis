@@ -192,6 +192,11 @@ class Training:
         ) > sum([metrics[i] - metrics[i - 1] for i in range(1, 4)]):
             return False
 
+        print()
+        print("New best scores:")
+        print(f"Comparing metrics: {metrics}")
+        print(f"Current best:      {self.best_fitting}")
+        print()
         self.best_fitting = metrics
         return True
 
@@ -364,10 +369,12 @@ class Training:
 
             res = metrics.report(wandb)
             # Only save the model if it is best fitting so far
-            if self._find_best_fitting(res):
-                torch.save(
-                    model, garage_path + "model_{}.pt".format(str(epoch).zfill(4))
-                )
+            # The beginning of the training is quite erratic, therefore, we only consider models from epoch 50 onwards
+            if epoch > 50:
+                if self._find_best_fitting(res):
+                    torch.save(
+                        model, garage_path + "model_{}.pt".format(str(epoch).zfill(4))
+                    )
             if self.verbose and epoch % 10 == 0:
                 print(
                     "Epoch {} completed. Running time: {}".format(
@@ -390,8 +397,17 @@ if __name__ == "__main__":
     # for architecture in ["slim", "squeeze"]:
     architecture = "squeeze"
     for image_resolution, batch_size in zip(
-        [(128, 128), (256, 256), (512, 512)],
-        [2**5, 2**3, 2**1],
+        [
+            # (128, 128),
+            # (256, 256),
+            (512, 512)
+        ],
+        [
+            # 2**5,
+            # 2**3,
+            2
+            ** 1
+        ],
     ):
         # tr = Training(
         #     device,
