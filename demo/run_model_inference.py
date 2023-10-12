@@ -365,7 +365,11 @@ if __name__ == "__main__":
     # You only have to do this the first time, afterwards the data is ready to go.
     # setup_env()
 
-    models = [("geok_slim_128.pt", 128)]
+    models = [
+        ("geok_squeeze_128_trans_opt.pt", 128),
+        ("geok_squeeze_256_trans_opt.pt", 256),
+        ("geok_squeeze_512_trans_opt.pt", 512),
+    ]
     comparator = Comparator(models)
 
     # Run inference for multiple models and display comparative tables

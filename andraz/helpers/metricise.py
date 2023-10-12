@@ -121,8 +121,10 @@ class Metricise:
         return jaccard(y, y_pred).cpu()
 
     # Wandb handling
-    def report_wandb(self, wandb, epoch=-1):
+    def report(self, wandb, epoch=-1):
+        self._aggregate_metrics()
         if settings.WANDB:
-            self._aggregate_metrics()
             wandb.log(self.metrics)
-            self.reset_metrics()
+        metrics = self.metrics
+        self.reset_metrics()
+        return metrics

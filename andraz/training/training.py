@@ -65,6 +65,8 @@ class Training:
         self.continue_model = continue_model
         self.sample = sample
 
+        self.best_fitting = [0, 0, 0, 0]
+
     def _report_settings(self):
         print("=======================================")
         print("Training with the following parameters:")
@@ -154,6 +156,44 @@ class Training:
                 if width == self.widths[-1] and image_pred:
                     metrics.add_image(X, y, y_pred, epoch)
         return metrics
+
+    def _find_best_fitting(self, metrics):
+        """
+        Could you perhaps try training it by monitoring the validation scores for each
+        width and then stopping the training at the epoch which maximises the difference
+        between the widths when they are in the right order?
+
+        Compare current metrics to best fitting and overwrite them if new best
+        fitting were found given to a heuristic we have to come up with.
+
+        Return True if best fitting was found, otherwise false.
+        """
+        metrics = [
+            metrics["Jaccard/valid/25/weeds"],
+            metrics["Jaccard/valid/50/weeds"],
+            metrics["Jaccard/valid/75/weeds"],
+            metrics["Jaccard/valid/100/weeds"],
+        ]
+        # print()
+        # print(f"Comparing metrics: {metrics}")
+        # print(f"Current best:      {self.best_fitting}")
+
+        # First check if the widths are in order.
+        for i, m in enumerate(metrics):
+            if i == 0:
+                continue
+            if metrics[i - 1] > m:
+                # print("Metrics not in order, returning false.")
+                return False
+
+        # Then check if the differences between neighbours are higher than current best
+        if sum(
+            [self.best_fitting[i] - self.best_fitting[i - 1] for i in range(1, 4)]
+        ) > sum([metrics[i] - metrics[i - 1] for i in range(1, 4)]):
+            return False
+
+        self.best_fitting = metrics
+        return True
 
     def _learning_rate_scheduler(self, optimizer):
         if self.learning_rate_scheduler == "no scheduler":
@@ -322,8 +362,12 @@ class Training:
                     epoch=epoch,
                 )
 
-            metrics.report_wandb(wandb)
-            torch.save(model, garage_path + "model_{}.pt".format(str(epoch).zfill(4)))
+            res = metrics.report(wandb)
+            # Only save the model if it is best fitting so far
+            if self._find_best_fitting(res):
+                torch.save(
+                    model, garage_path + "model_{}.pt".format(str(epoch).zfill(4))
+                )
             if self.verbose and epoch % 10 == 0:
                 print(
                     "Epoch {} completed. Running time: {}".format(
@@ -333,7 +377,7 @@ class Training:
 
         if settings.WANDB:
             wandb.finish()
-        torch.save(model, garage_path + "model.pt".format(epoch))
+        torch.save(model, garage_path + "model_final.pt".format(epoch))
 
 
 if __name__ == "__main__":
@@ -343,26 +387,26 @@ if __name__ == "__main__":
     # for sample_size in [10, 25, 50, 100]:
     # We need to train the new geok models of different sizes with and without transfer learning from cofly dataset
     # We do this for both sunet and ssunet
-    for architecture in ["slim", "squeeze"]:
-        for image_resolution, batch_size in [
-            ((512, 512), 2**1),
-        ]:
-            tr = Training(
-                device,
-                dataset="geok",
-                image_resolution=image_resolution,
-                architecture=architecture,
-                batch_size=batch_size,
-            )
-            tr.train()
-            tr = Training(
-                device,
-                dataset="geok",
-                image_resolution=image_resolution,
-                architecture=architecture,
-                batch_size=batch_size,
-                continue_model="cofly_{}_{}.pt".format(
-                    architecture, image_resolution[0]
-                ),
-            )
-            tr.train()
+    # for architecture in ["slim", "squeeze"]:
+    architecture = "squeeze"
+    for image_resolution, batch_size in zip(
+        [(128, 128), (256, 256), (512, 512)],
+        [2**5, 2**3, 2**1],
+    ):
+        # tr = Training(
+        #     device,
+        #     dataset="geok",
+        #     image_resolution=image_resolution,
+        #     architecture=architecture,
+        #     batch_size=batch_size,
+        # )
+        # tr.train()
+        tr = Training(
+            device,
+            dataset="geok",
+            image_resolution=image_resolution,
+            architecture=architecture,
+            batch_size=batch_size,
+            continue_model="cofly_{}_{}.pt".format(architecture, image_resolution[0]),
+        )
+        tr.train()
