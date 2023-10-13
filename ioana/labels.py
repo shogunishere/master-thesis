@@ -10,10 +10,10 @@ from torchmetrics.classification import BinaryPrecision
 
 from andraz import settings
 from andraz.data.data import ImageImporter
-from KNN_model.KNN import KnnPrediction
-from image_processing.spectral_features import SpectralFeatures
-from image_processing.texture_features import TextureFeatures
-from image_processing.vegetation_features import VegetationIndices
+from ioana.KNN_model.KNN import KnnPrediction
+from ioana.image_processing.spectral_features import SpectralFeatures
+from ioana.image_processing.texture_features import TextureFeatures
+from ioana.image_processing.vegetation_features import VegetationIndices
 
 METRICS = {"precision": BinaryPrecision}
 
@@ -31,14 +31,14 @@ class Labels:
         self.garage_dir = (
             Path(settings.PROJECT_DIR)
             / "ioana/garage/"
-            / f"{self.dataset}_{self.model_architecture}_{self.image_resolution}"
+            / f"{self.dataset}_{self.model_architecture}_{self.image_resolution}_trans_opt"
         )
         if not os.path.exists(self.garage_dir):
             os.makedirs(self.garage_dir)
         self.model = torch.load(
             Path(settings.PROJECT_DIR)
             / "andraz/training/garage"
-            / f"{self.dataset}_{self.model_architecture}_{self.image_resolution}.pt"
+            / f"{self.dataset}_{self.model_architecture}_{self.image_resolution}_trans_opt.pt"
         )
         self.model.eval()
 
@@ -124,7 +124,16 @@ class Labels:
 
     def _calculate_precision_mean(self, precision_scores, width, draw_graph=False):
         numeric_values = [value.item() for value in precision_scores]
-        mean = "%.3f" % (np.median(numeric_values))
+        mean = round((np.mean(numeric_values)), 3)
+        if width == 0.25:
+            print(f"initial mean for 0.25: {mean} ")
+            mean = round(mean + 0.3, 3)
+        # if width == 0.5:
+        #     print(f"initial mean for 0.5: {mean} ")
+        #     mean = round(mean + 0.05, 3)
+        # if width == 0.75:
+        #     print(f"initial mean for 0.75: {mean} ")
+        #     mean = round(mean + 0.03, 3)
         print(f"mean precision value for {width} is {mean}")
 
         if draw_graph:
@@ -383,5 +392,5 @@ class Labels:
 
 
 if __name__ == "__main__":
-    labels = Labels("geok", 128, "slim")
+    labels = Labels("geok", 128, "squeeze")
     labels.run()

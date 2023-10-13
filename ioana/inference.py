@@ -179,7 +179,7 @@ class AdaptiveWidth:
                 if int(prediction) == 1:
                     return width
             except IndexError:
-                print("Something is borken")
+                print("Something is broken")
                 continue
         return 1
 
