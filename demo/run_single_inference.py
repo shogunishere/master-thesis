@@ -12,6 +12,7 @@ from torchvision.utils import draw_segmentation_masks
 from andraz import settings
 from andraz.data.data import ImageImporter
 from andraz.helpers.drive_fetch import setup_env
+from andraz.helpers.metricise import Metricise
 from ioana.inference import AdaptiveWidth
 
 
@@ -23,6 +24,8 @@ class SingleImageInference:
         model_architecture,
         fixed_image=-1,
         save_image=False,
+        is_trans=False,
+        is_best_fitting=False,
     ):
         self.project_path = Path(settings.PROJECT_DIR)
         if dataset == "infest":
@@ -34,16 +37,17 @@ class SingleImageInference:
         assert model_architecture in ["slim", "squeeze"]
         self.model_architecture = model_architecture
         self.image_resolution = image_resolution
+        model_key = f"{dataset}_{model_architecture}_{image_resolution[0]}"
+        if is_trans:
+            model_key += "_trans"
+        if is_best_fitting:
+            model_key += "_opt"
         self.model = torch.load(
-            Path(settings.PROJECT_DIR)
-            / "andraz/training/garage/{}_{}_{}.pt".format(
-                dataset, model_architecture, image_resolution[0]
-            )
+            Path(settings.PROJECT_DIR) / f"andraz/training/garage/{model_key}.pt"
         )
         self.fixed_image = fixed_image
         self.save_image = save_image
-
-        self.adaptive_width = AdaptiveWidth()
+        self.adaptive_width = AdaptiveWidth(model_key)
         self.tensor_to_image = ImageImporter(dataset).tensor_to_image
 
     def _get_random_image_path(self):
@@ -167,9 +171,15 @@ class SingleImageInference:
         # Get a prediction
         y_pred = self.model.forward(image)
 
+        metrics = Metricise()
+        metrics.calculate_metrics(mask, y_pred, "test")
+        results = metrics.report(None)
+
         # Generate overlayed segmentation masks (ground truth and prediction)
         if self.save_image:
             self._generate_images(image, mask, y_pred)
+
+        return results
 
 
 if __name__ == "__main__":
@@ -190,5 +200,11 @@ if __name__ == "__main__":
         fixed_image=-1,
         # Do you want to generate a mask/image overlay
         save_image=True,
+        # Was segmentation model trained using transfer learning
+        is_trans=True,
+        # Was segmentation model trained with find_best_fitting (utilising
+        # model that has the highest difference in iou between widths
+        is_best_fitting=True,
     )
-    si.infer()
+    results = si.infer()
+    print(results)

@@ -1,97 +1,129 @@
 import numpy as np
 import torch
 import wandb
-from numpy import unique
-from sklearn.metrics import precision_score
-from torchmetrics import JaccardIndex
-from torchmetrics.classification import BinaryPrecision
 
 from andraz import settings
+from andraz.data.data import ImageImporter
+from andraz.helpers.masking import get_binary_masks_infest
+from ioana.inference import AdaptiveWidth
 
 
 class Metricise:
-    def __init__(self, metrics):
-        self.names = metrics
-        self.metrics = None
-        self.reset_metrics()
-        self.device = "cuda:0"
+    """
+    How to use this class?
+    This is meant to be used on per-epoch basis, meaning a typical usage looks like this:
+    for __ in epochs:
+        # Instantiate a fresh object to get empy metrics dict
+        metrics = Metricise()
+        # Probably train and valid set (or only test when testing)
+        metrics.evaluate(model, loader, dataset_name, epoch, ...)
+        metrics.evaluate(model, loader, dataset_name, epoch, ...)
+        results = metrics.report()
+    """
 
-    def _aggregate_metrics(self):
-        remove_list = []
-        for x in self.metrics:
-            if x == "Image":
-                if self.metrics[x]:
-                    self.metrics[x] = self.metrics[x]
-                else:
-                    remove_list.append(x)
-            elif x == "learning rate":
-                self.metrics[x] = self.metrics[x][0]
-            else:
-                self.metrics[x] = np.mean(self.metrics[x])
-        for x in remove_list:
-            self.metrics.pop(x)
-
-    def reset_metrics(self):
-        self.metrics = {x: [] for x in self.names}
-
-    # Adding metrics
-    def add_loss(self, value, name):
-        self.metrics["Loss/{}".format(name)].append(value)
-
-    def add_jaccard(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
-        for i in range(y.shape[0]):
-            for j in range(y.shape[1]):
-                self.metrics["Jaccard/{}/{}".format(name, classes[j])].append(
-                    settings.METRICS["iou"](validate_args=False)
-                    .to(self.device)(y[i][j], y_pred[i][j])
-                    .cpu()
-                )
-
-    def add_precision_old_old(
-        self, y, y_pred, name, classes=["back", "weeds", "lettuce"]
+    def __init__(
+        self,
+        device="cuda:0" if torch.cuda.is_available() else "cpu",
+        classes=("back", "weeds"),
+        widths=settings.WIDTHS,
+        metrics=settings.METRICS,
+        # Calculate also the metrics for our adaptive algorithm
+        use_adaptive=False,
+        # Calculate also the metrics of the oracle predictor
+        use_oracle=False,
     ):
-        # Iterate through the batch of data
-        for i in range(y.shape[0]):
-            # Iterate through classes
-            for j in range(y.shape[1]):
-                # If everything is predicted as negative
-                if len(unique(y_pred[i][j].cpu())) == 1:
-                    self.metrics["OldPrecision/{}/{}".format(name, classes[j])].append(
-                        0
-                    )
+        self.results = {}
+        self.device = device
+        self.classes = classes
+        self.widths = widths
+        self.metrics = metrics
+        self.use_adaptive = use_adaptive
+        self.use_oracle = use_oracle
+
+    def evaluate(
+        self,
+        model,
+        loader,
+        name,
+        epoch,
+        loss_function=None,
+        image_pred=False,
+        adaptive_knns=None,
+    ):
+        for width in settings.WIDTHS:
+            key = f"{name}/{int(width * 100)}"
+            for X, y in loader:
+                X, y = X.to(self.device), y.to(self.device)
+                model.set_width(width)
+                y_pred = model.forward(X)
+
+                self.calculate_metrics(y, y_pred, key)
+                if loss_function:
+                    self.add_static_value(loss_function(y, y_pred).cpu(), key + "/loss")
+
+                if width == self.widths[-1] and image_pred:
+                    self._add_image(X, y, y_pred, epoch)
+
+        if self.use_adaptive:
+            self._calculate_adpative(adaptive_knns, name, loader, model)
+
+    def calculate_metrics(self, y_true, y_pred, name):
+        y_pred = get_binary_masks_infest(y_pred, dim=2)
+        assert y_true.shape == y_pred.shape
+        for metric in self.metrics:
+            for i, pred_class in enumerate(self.classes):
+                key = f"{name}/{metric}/{pred_class}"
+                value = self.metrics[metric](validate_args=False).to(self.device)(
+                    y_true[:, i], y_pred[:, i]
+                )
+                if key in self.results:
+                    self.results[key].append(value.cpu())
                 else:
-                    self.metrics["OldPrecision/{}/{}".format(name, classes[j])].append(
-                        # For the binary precision evaluation to work, we need 1D array
-                        precision_score(
-                            [
-                                int(xx)
-                                for x in y[i][j].cpu().numpy().tolist()
-                                for xx in x
-                            ],
-                            [
-                                int(xx)
-                                for x in y_pred[i][j].cpu().numpy().tolist()
-                                for xx in x
-                            ],
-                        )
-                    )
+                    self.results[key] = [value.cpu()]
 
-    def add_precision_old(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
-        precision_calculation = BinaryPrecision(validate_args=False).to("cuda:0")
-        for j in range(y.shape[1]):
-            result = float(precision_calculation(y[:, j], y_pred[:, j]).cpu())
-            self.metrics["Precision/{}/{}".format(name, classes[j])].append(result)
+    def _calculate_adpative(self, adaptive_knns, name, loader, model):
+        if not adaptive_knns:
+            raise ValueError(
+                "Please set adaptive_knns if you want to run the adaptation algorithm."
+            )
+        width_selector = AdaptiveWidth(adaptive_knns)
+        key = f"{name}/adapt"
+        for X, y in loader:
+            image = ImageImporter("geok").tensor_to_image(X)[0]
+            X, y = X.to(self.device), y.to(self.device)
+            width = width_selector.get_image_width(image)
+            model.set_width(width)
+            y_pred = model.forward(X)
+            self.calculate_metrics(y, y_pred, key)
+            self.add_static_value(width, f"{key}/width")
 
-    def add_precision(self, y, y_pred, name, classes=["back", "weeds", "lettuce"]):
-        for i in range(y.shape[0]):
-            for j in range(y.shape[1]):
-                self.metrics["Precision/{}/{}".format(name, classes[j])].append(
-                    settings.METRICS["precision"](validate_args=False)
-                    .to(self.device)(y[i][j], y_pred[i][j])
-                    .cpu()
+    def _calculate_oracle(self):
+        for metric in self.metrics:
+            for pred_class in self.classes:
+                values, widths = [], []
+                for i in range(len(self.results[f"test/25/{metric}/{pred_class}"])):
+                    max_val, max_width = 0, 0
+                    for width in self.widths:
+                        value = self.results[
+                            f"test/{str(int(width*100))}/{metric}/{pred_class}"
+                        ][i]
+                        if value > max_val:
+                            max_val = value
+                            max_width = width
+                    values.append(max_val)
+                    widths.append(max_width)
+                self.results[f"test/oracle/{metric}/{pred_class}"] = np.mean(values)
+                self.results[f"test/oracle/{metric}/{pred_class}/width"] = np.mean(
+                    widths
                 )
 
-    def add_image(self, X, y, y_pred, epoch):
+    def add_static_value(self, value, key):
+        if key in self.results:
+            self.results[key].append(value)
+        else:
+            self.results[key] = [value]
+
+    def _add_image(self, X, y, y_pred, epoch):
         y = torch.argmax(y, dim=1)
         y = y + 1
 
@@ -99,7 +131,9 @@ class Metricise:
         y_pred = y_pred + 1
 
         table = wandb.Table(columns=["ID", "Epoch", "Image"])
-        class_labels = {1: "Background", 2: "Weeds", 3: "Lettuce"}
+        class_labels = {
+            i + 1: class_label for i, class_label in enumerate(self.classes)
+        }
         for i in range(10):
             try:
                 original_image = X[i].cpu().permute(1, 2, 0)
@@ -123,22 +157,27 @@ class Metricise:
                 table.add_data(i, epoch, masks)
             except IndexError:
                 pass
+        self.results[f"images"] = table
 
-        self.metrics["Image"] = table
-
-    def add_learning_rate(self, learning_rate):
-        self.metrics["learning_rate"].append(learning_rate)
-
-    # Metrics calculation
-    def _jaccard(self, y, y_pred, device="cuda:0"):
-        jaccard = JaccardIndex("binary").to(device)
-        return jaccard(y, y_pred).cpu()
-
-    # Wandb handling
-    def report(self, wandb, epoch=-1):
+    def report(self, wandb):
         self._aggregate_metrics()
         if wandb and settings.WANDB:
-            wandb.log(self.metrics)
-        metrics = self.metrics
-        self.reset_metrics()
-        return metrics
+            wandb.log(self.results)
+        return self.results
+
+    def _aggregate_metrics(self):
+        remove_list = []
+        if self.use_oracle:
+            self._calculate_oracle()
+        for x in self.results:
+            if x == "images":
+                if self.results[x]:
+                    self.results[x] = self.results[x]
+                else:
+                    remove_list.append(x)
+            elif x == "learning_rate":
+                self.results[x] = self.results[x][0]
+            else:
+                self.results[x] = np.mean(self.results[x])
+        for x in remove_list:
+            self.results.pop(x)

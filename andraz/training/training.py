@@ -123,40 +123,6 @@ class Training:
             # print(flop_count_table(flops))
         print("=======================================")
 
-    def _evaluate(
-        self,
-        metrics,
-        loader,
-        model,
-        dataset_name,
-        device,
-        loss_function,
-        image_pred=False,
-        epoch=0,
-    ):
-        """
-        Evaluate performance and add to metrics.
-        """
-        for X, y in loader:
-            X, y = X.to(device), y.to(device)
-            for width in self.widths:
-                model.set_width(width)
-                y_pred = model.forward(X)
-
-                name = "{}/{}".format(dataset_name, int(width * 100))
-                metrics.add_loss(
-                    loss_function(y_pred, y).cpu(),
-                    name,
-                )
-
-                # This also works for cofly as lettuce rows just stay empty
-                y_pred = get_binary_masks_infest(y_pred)
-                metrics.add_jaccard(y, y_pred, name)
-                metrics.add_precision(y, y_pred, name)
-                if width == self.widths[-1] and image_pred:
-                    metrics.add_image(X, y, y_pred, epoch)
-        return metrics
-
     def _find_best_fitting(self, metrics):
         """
         Could you perhaps try training it by monitoring the validation scores for each
@@ -169,14 +135,11 @@ class Training:
         Return True if best fitting was found, otherwise false.
         """
         metrics = [
-            metrics["Jaccard/valid/25/weeds"],
-            metrics["Jaccard/valid/50/weeds"],
-            metrics["Jaccard/valid/75/weeds"],
-            metrics["Jaccard/valid/100/weeds"],
+            metrics["iou/valid/25/weeds"],
+            metrics["iou/valid/50/weeds"],
+            metrics["iou/valid/75/weeds"],
+            metrics["iou/valid/100/weeds"],
         ]
-        # print()
-        # print(f"Comparing metrics: {metrics}")
-        # print(f"Current best:      {self.best_fitting}")
 
         # First check if the widths are in order.
         for i, m in enumerate(metrics):
@@ -301,26 +264,6 @@ class Training:
         )
         scheduler = self._learning_rate_scheduler(optimizer)
 
-        # Prepare the metrics tracker
-        m_names = (
-            [
-                "{}/{}/{}".format(x, y, int(z * 100))
-                for x in ["Loss"]
-                for y in ["train", "valid"]
-                for z in self.widths
-            ]
-            + [
-                "{}/{}/{}/{}".format(x, y, int(z * 100), w)
-                for x in ["Jaccard", "Precision"]
-                for y in ["train", "valid"]
-                for z in self.widths
-                for w in ["back", "weeds", "lettuce"]
-            ]
-            + ["learning_rate"]
-            + ["Image"]
-        )
-        metrics = Metricise(m_names)
-
         for epoch in range(self.epochs):
             s = datetime.now()
 
@@ -343,29 +286,25 @@ class Training:
                 # Update weights
                 optimizer.step()
 
-            if self.learning_rate_scheduler == "no scheduler":
-                metrics.add_learning_rate(self.learning_rate)
-            else:
-                metrics.add_learning_rate(scheduler.get_last_lr())
-                scheduler.step()
-
             model.eval()
             with torch.no_grad():
-                # Training evaluation
-                metrics = self._evaluate(
-                    metrics, train_loader, model, "train", self.device, loss_function
+                metrics = Metricise(device=self.device)
+                metrics.evaluate(
+                    model, train_loader, "train", epoch, loss_function=loss_function
                 )
-                # Validation evaluation
-                metrics = self._evaluate(
-                    metrics,
-                    valid_loader,
+                metrics.evaluate(
                     model,
+                    valid_loader,
                     "valid",
-                    self.device,
-                    loss_function,
+                    epoch,
+                    loss_function=loss_function,
                     image_pred=epoch % 50 == 0,
-                    epoch=epoch,
                 )
+            if self.learning_rate_scheduler == "no scheduler":
+                metrics.add_static_value(self.learning_rate, "learning_rate")
+            else:
+                metrics.add_static_value(scheduler.get_last_lr(), "learning_rate")
+                scheduler.step()
 
             res = metrics.report(wandb)
             # Only save the model if it is best fitting so far
@@ -381,7 +320,6 @@ class Training:
                         epoch + 1, datetime.now() - s
                     )
                 )
-
         if settings.WANDB:
             wandb.finish()
         torch.save(model, garage_path + "model_final.pt".format(epoch))
@@ -397,17 +335,8 @@ if __name__ == "__main__":
     # for architecture in ["slim", "squeeze"]:
     architecture = "squeeze"
     for image_resolution, batch_size in zip(
-        [
-            # (128, 128),
-            # (256, 256),
-            (512, 512)
-        ],
-        [
-            # 2**5,
-            # 2**3,
-            2
-            ** 1
-        ],
+        [(128, 128), (256, 256), (512, 512)],
+        [2**5, 2**3, 2**1],
     ):
         # tr = Training(
         #     device,

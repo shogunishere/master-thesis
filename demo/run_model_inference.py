@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from plotly import graph_objects as go
+from plotly.subplots import make_subplots
 from torch.utils.data import DataLoader
 from torchmetrics.classification import (
     BinaryPrecision,
@@ -42,15 +43,6 @@ class Inference:
         self.model.eval()
         self.image_resolution = image_resolution
         self.metrics = settings.METRICS if metrics is None else metrics
-        self.results = {
-            x: {
-                "iou": {"back": [], "weeds": []},
-                "precision": {"back": [], "weeds": []},
-                "recall": {"back": [], "weeds": []},
-                "f1score": {"back": [], "weeds": []},
-            }
-            for x in settings.WIDTHS + ["adapt"]
-        }
         self.width_distribution = {x: 0 for x in settings.WIDTHS}
         # self.width_selection = AdaptiveWidth(
         #     garage_dir=Path(settings.PROJECT_DIR) / "ioana/garage" / self.model_name
@@ -75,181 +67,16 @@ class Inference:
         _, test = ii.get_dataset()
         return DataLoader(test, batch_size=1, shuffle=False)
 
-    def _infer(self):
+    def run(self):
         test_loader = self._load_test_data()
-        # Prepare the metrics tracker
-        m_names = (
-            [
-                "{}/{}/{}/{}".format(x, y, int(z * 100), w)
-                for x in ["Jaccard", "Precision"]
-                for y in ["train", "valid"]
-                for z in settings.WIDTHS
-                for w in ["back", "weeds"]
-            ]
-            + ["learning_rate"]
-            + ["Image"]
-        )
-        metrics = Metricise(m_names)
         # Infer for all available widths of the model
         with torch.no_grad():
-
-            for width in settings.WIDTHS:
-                self.model.set_width(width)
-                metrics = self._evaluate(
-                    metrics, test_loader, self.model, "valid", "cuda:0", None
-                )
+            metrics = Metricise(device=self.device, use_adaptive=True, use_oracle=True)
+            metrics.evaluate(
+                self.model, test_loader, "test", 0, adaptive_knns=self.model_name
+            )
             self.results = metrics.report(None)
-            # i = 1
-            # for X, y in test_loader:
-            #     # Resize the image to the required input size
-            #     X = X.to("cuda:0")
-            #     y = y.to("cuda:0")
-            #     y_pred = self.model.forward(X)
-            #     y_pred = torch.where(y_pred < 0.5, 0, 1)
-            #
-            #     if self.create_images:
-            #         self._generate_mask_image(
-            #             X[0].permute(1, 2, 0).cpu(),
-            #             y[0][1].cpu(),
-            #             y_pred[0][1].cpu(),
-            #             int(width * 100),
-            #             i,
-            #         )
-            #     metrics
-            #     for metric in self.metrics:
-            #         for j, pred_class in enumerate(["back", "weeds"]):
-            #             self.results[width][metric][pred_class].append(
-            #                 self.metrics[metric](validate_args=False)
-            #                 .to(self.device)(y[0][j], y_pred[0][j])
-            #                 .cpu()
-            #             )
-            #     i += 1
-        # # Infer with the adaptation algorithm
-        # with torch.no_grad():
-        #     # We load the test loader again, as we need full-size
-        #     # images in order for the width selection to work properly
-        #     i = 1
-        #     for X, y in test_loader:
-        #         # Get the image width and set the model to it
-        #         image = self.tensor_to_image(X)[0]
-        #         width = self.width_selection.get_image_width(image)
-        #         self.width_selection_widths.append(width)
-        #         self.model.set_width(width)
-        #         self.width_distribution[width] += 1
-        #         # Resize the image to the required input size
-        #         X = X.to("cuda:0")
-        #         y = y.to("cuda:0")
-        #         y_pred = self.model.forward(X)
-        #         y_pred = torch.where(y_pred < 0.5, 0, 1)
-        #
-        #         if self.create_images:
-        #             self._generate_mask_image(
-        #                 X[0].permute(1, 2, 0).cpu(),
-        #                 y[0][1].cpu(),
-        #                 y_pred[0][1].cpu(),
-        #                 "adapt",
-        #                 i,
-        #             )
-        #
-        #         for metric in self.metrics:
-        #             for j, pred_class in enumerate(["back", "weeds"]):
-        #                 self.results["adapt"][metric][pred_class].append(
-        #                     self.metrics[metric](validate_args=False)
-        #                     .to(self.device)(y[0][j], y_pred[0][j])
-        #                     .cpu()
-        #                 )
-        # self._average_results()
         return self.results
-
-    def _evaluate(
-        self,
-        metrics,
-        loader,
-        model,
-        dataset_name,
-        device,
-        loss_function,
-        image_pred=False,
-        epoch=0,
-    ):
-        """
-        Evaluate performance and add to metrics.
-        """
-        for X, y in loader:
-            X, y = X.to(device), y.to(device)
-            for width in settings.WIDTHS:
-                model.set_width(width)
-                y_pred = model.forward(X)
-
-                name = "{}/{}".format(dataset_name, int(width * 100))
-                # This also works for cofly as lettuce rows just stay empty
-                y_pred = get_binary_masks_infest(y_pred)
-                metrics.add_jaccard(y, y_pred, name)
-                metrics.add_precision(y, y_pred, name)
-        return metrics
-
-    def _average_results(self):
-        """
-        Average results per-width, for adaptation algorithm, and calculate
-        the oracle prediction -> optimal results of predictions of different widths.
-        """
-        oracle = {
-            "iou": {"back": [], "weeds": [], "backwidths": [], "weedswidths": []},
-            "precision": {"back": [], "weeds": [], "backwidths": [], "weedswidths": []},
-            "recall": {"back": [], "weeds": [], "backwidths": [], "weedswidths": []},
-            "f1score": {"back": [], "weeds": [], "backwidths": [], "weedswidths": []},
-        }
-        for width_mult in settings.WIDTHS + ["adapt"]:
-            for metric in self.metrics:
-                for _, pred_class in enumerate(["back", "weeds"]):
-                    # Calculate for oracle
-                    if width_mult == 0.25:
-                        oracle[metric][pred_class] = self.results[width_mult][metric][
-                            pred_class
-                        ]
-                        oracle[metric][pred_class + "widths"] = np.repeat(
-                            width_mult, len(oracle[metric][pred_class])
-                        )
-                    elif width_mult in settings.WIDTHS:
-                        for i, (x, o) in enumerate(
-                            zip(
-                                self.results[width_mult][metric][pred_class],
-                                oracle[metric][pred_class],
-                            )
-                        ):
-                            oracle[metric][pred_class][i] = max(x, o)
-                            if x > o:
-                                oracle[metric][pred_class + "widths"][i] = width_mult
-                    else:
-                        pass
-                    # Average results
-                    self.results[width_mult][metric][pred_class] = np.mean(
-                        self.results[width_mult][metric][pred_class]
-                    )
-        # Average the oracle results
-        for metric in self.metrics:
-            for _, pred_class in enumerate(["back", "weeds"]):
-                oracle[metric][pred_class] = np.mean(oracle[metric][pred_class])
-                oracle[metric][pred_class + "widths"] = np.mean(
-                    oracle[metric][pred_class + "widths"]
-                )
-        self.results["adapt"]["avgwidth"] = np.mean(self.width_selection_widths)
-        self.results["oracle"] = oracle
-
-    def _generate_mask_image(self, x, y, pred, width, i):
-        save_path = "images/{}".format(self.model_name)
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        if width == 25:
-            plt.imshow(x)
-            plt.savefig("{}/{}_{}.png".format(save_path, str(i).zfill(4), "image"))
-            plt.imshow(y)
-            plt.savefig("{}/{}_{}.png".format(save_path, str(i).zfill(4), "mask"))
-        plt.imshow(pred)
-        plt.savefig("{}/{}_{}_{}.png".format(save_path, str(i).zfill(4), "pred", width))
-
-    def run(self):
-        self._infer()
 
 
 class Comparator:
@@ -259,72 +86,48 @@ class Comparator:
         self.graphs = graphs
 
     def _draw_tab(self, results):
-        for pred_class in ["back", "weeds"]:
-            for metric in ["Jaccard", "Precision"]:
-                print(
-                    "======================================================================================"
-                )
-                print(metric, pred_class)
-                print()
-                print("{:10s}".format(""), end="")
-                for model, _ in self.models:
-                    print("{:20s}".format(model), end=" ")
-                print()
-                for width in settings.WIDTHS:
-                    print("{:9s}".format(str(width)), end=" ")
-                    for model, _ in self.models:
-                        print(
-                            "{:20s}".format(
-                                str(
-                                    round(
-                                        results[model][
-                                            f"{metric}/valid/{str(int(width * 100))}/{pred_class}"
-                                        ]
-                                        * 100,
-                                        2,
-                                    )
+        for class_name in ["back", "weeds"]:
+            for metric in self.metrics:
+                values = []
+                for model_name, _ in self.models:
+                    model_values = []
+                    for width in settings.WIDTHS + ["adapt", "oracle"]:
+                        if type(width) == float:
+                            width = str(int(width * 100))
+                        model_values.append(
+                            str(
+                                round(
+                                    results[model_name][
+                                        f"test/{width}/{metric}/{class_name}"
+                                    ],
+                                    4,
                                 )
-                                + " %"
-                            ),
-                            end=" ",
+                            )
                         )
-                    print()
+                    model_values.append(results[model_name]["test/adapt/width"])
+                    model_values.append(
+                        results[model_name][f"test/oracle/{metric}/{class_name}/width"]
+                    )
+                    values.append(model_values)
 
-                # # Print average width selected for adaptation alg
-                # print("{:9s}".format("adapt w"), end=" ")
-                # for model, _ in self.models:
-                #     print(
-                #         "{:20s}".format(
-                #             str(
-                #                 round(
-                #                     results[model]["adapt"]["avgwidth"],
-                #                     2,
-                #                 )
-                #             )
-                #         ),
-                #         end=" ",
-                #     )
-                # print()
-
-                # Print average width selected for oracle
-                # print("{:9s}".format("oracle w"), end=" ")
-                # for model, _ in self.models:
-                #     print(
-                #         "{:20s}".format(
-                #             str(
-                #                 round(
-                #                     results[model]["oracle"][metric][
-                #                         pred_class + "widths"
-                #                     ],
-                #                     2,
-                #                 )
-                #             )
-                #         ),
-                #         end=" ",
-                #     )
-                # print()
-
-                print()
+                fig = go.Figure(
+                    data=[
+                        go.Table(
+                            header={"values": [""] + [x[0] for x in self.models]},
+                            cells={
+                                "values": [
+                                    settings.WIDTHS
+                                    + ["adapt", "oracle", "adapt w", "oracle w"]
+                                ]
+                                + values
+                            },
+                        )
+                    ]
+                )
+                fig.update_layout({"title": f"{class_name} {metric}"})
+                fig.write_image(
+                    f"results/{class_name}_{metric}.jpg", width=400 * len(self.models)
+                )
 
     def _draw_graph(self, model, results, mean_width):
         for pred_class in ["weeds", "back"]:
@@ -385,12 +188,6 @@ class Comparator:
                 fig.show()
                 # Only show once as all the plots will be the same
                 graph = False
-
-            weighted_sum = sum(
-                key * value for key, value in infer.width_distribution.items()
-            )
-            total_weight = sum(infer.width_distribution.values())
-            # weighted_mean = weighted_sum / total_weight
 
             if self.graphs:
                 self._draw_graph(model, results[model], 1)

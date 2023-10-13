@@ -304,4 +304,5 @@ demo/prediction.png
 demo/groundtruth.jpg
 demo/prediction.jpg
 demo/images/
+demo/results/*
 # End of Demo custom entries

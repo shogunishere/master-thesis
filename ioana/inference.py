@@ -21,11 +21,17 @@ warnings.filterwarnings(
 
 class AdaptiveWidth:
     def __init__(self, garage_dir):
-
+        garage_dir = Path(settings.PROJECT_DIR) / "ioana/garage" / garage_dir
         # Initialise the scaler for image scaling
-        train_features = pd.read_pickle(garage_dir / "train_features.pickle").drop(
-            ["index"], axis="columns"
-        )
+        try:
+            train_features = pd.read_pickle(garage_dir / "train_features.pickle").drop(
+                ["index"], axis="columns"
+            )
+        except FileNotFoundError:
+            raise ValueError(
+                f"Knn models for this segmentation model ({str(garage_dir).split('/')[-1]}) have not yet been generated. "
+                "Generate those first, then you can use the adaptive width algorithm."
+            )
         self.scaler = MinMaxScaler()
         self.scaler.fit(train_features)
 
@@ -189,7 +195,7 @@ if __name__ == "__main__":
     _, test = ii.get_dataset()
     test_images = ii.tensor_to_image(test.X)
 
-    aw = AdaptiveWidth()
+    aw = AdaptiveWidth("cofly_slim_128")
     for i in range(len(test_images)):
         print(test_images[i].shape)
         print(aw.get_image_width(test_images[i]))
