@@ -191,11 +191,11 @@ if __name__ == "__main__":
         dataset="geok",
         # Tuple of two numbers: (128, 128), (256, 256), or (512, 512)
         image_resolution=(
-            128,
-            128,
+            256,
+            256,
         ),
         # slim or squeeze
-        model_architecture="slim",
+        model_architecture="squeeze",
         # Set to a positive integer to select a specific image from the dataset, otherwise random
         fixed_image=-1,
         # Do you want to generate a mask/image overlay
