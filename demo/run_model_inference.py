@@ -125,6 +125,8 @@ class Comparator:
                     ]
                 )
                 fig.update_layout({"title": f"{class_name} {metric}"})
+                if not os.path.exists("results"):
+                    os.mkdir("results")
                 fig.write_image(
                     f"results/{class_name}_{metric}.jpg", width=400 * len(self.models)
                 )
