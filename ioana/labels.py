@@ -14,6 +14,7 @@ from ioana.KNN_model.KNN import KnnPrediction
 from ioana.image_processing.spectral_features import SpectralFeatures
 from ioana.image_processing.texture_features import TextureFeatures
 from ioana.image_processing.vegetation_features import VegetationIndices
+from ioana.feature_selection import FeatureSelection
 
 METRICS = {"precision": BinaryPrecision}
 
@@ -122,19 +123,40 @@ class Labels:
             self.results["test"][width]["precision"]["weeds"],
         )
 
-    def _calculate_precision_mean(self, precision_scores, width, draw_graph=False):
+    def _calculate_precision_mean_train(self, precision_scores, width, draw_graph=False):
         numeric_values = [value.item() for value in precision_scores]
-        mean = round((np.mean(numeric_values)), 3)
+        mean = round((np.mean(numeric_values)), 4)
         if width == 0.25:
-            print(f"initial mean for 0.25: {mean} ")
-            mean = round(mean + 0.3, 3)
-        # if width == 0.5:
-        #     print(f"initial mean for 0.5: {mean} ")
-        #     mean = round(mean + 0.05, 3)
-        # if width == 0.75:
-        #     print(f"initial mean for 0.75: {mean} ")
-        #     mean = round(mean + 0.03, 3)
+            print(f"initial mean for 0.25 train: {mean} ")
+            mean = round(mean + 0.5, 4)
+        if width == 0.5:
+            print(f"initial mean for 0.5 train: {mean} ")
+            mean = round(mean + 0.04, 4)
+        if width == 0.75:
+            print(f"initial mean for 0.75 train: {mean} ")
+            mean = round(mean + 0.03, 4)
         print(f"mean precision value for {width} is {mean}")
+
+        if draw_graph:
+            plt.boxplot(numeric_values, vert=False)
+            plt.title(
+                f"Precision Score Distribution for 'weeds' {width} model {self.model_name}"
+            )
+            plt.xlabel("Precision Score")
+            plt.ylabel("Class: weeds")
+            plt.show()
+
+        return mean
+    
+    def _calculate_precision_mean_test(self, precision_scores, width, draw_graph=False):
+        numeric_values = [value.item() for value in precision_scores]
+        mean = round((np.mean(numeric_values)), 4)
+        if width == 0.25:
+            print(f"initial mean for 0.25 test: {mean} ")
+        if width == 0.5:
+            print(f"initial mean for 0.5 test: {mean} ")
+        if width == 0.75:
+            print(f"initial mean for 0.75 test: {mean} ")
 
         if draw_graph:
             plt.boxplot(numeric_values, vert=False)
@@ -153,8 +175,8 @@ class Labels:
         train_features = pd.read_pickle(self.garage_dir / "train_features.pickle")
         test_features = pd.read_pickle(self.garage_dir / "test_features.pickle")
         # TODO: I (Andraž) changed this to calculate two separate means (otherwise we run out of samples in the test set)
-        train_mean = float(self._calculate_precision_mean(precision_list_train, width))
-        test_mean = float(self._calculate_precision_mean(precision_list_test, width))
+        train_mean = float(self._calculate_precision_mean_train(precision_list_train, width))
+        test_mean = float(self._calculate_precision_mean_test(precision_list_test, width))
         for features, precisions_list, mean in [
             (train_features, precision_list_train, train_mean),
             (test_features, precision_list_test, test_mean),
@@ -365,6 +387,7 @@ class Labels:
                 X_test,
                 y_test,
                 save_model=True,
+                metrics=False
             )
 
             # finally, drop the lines that have label 1 in train_dataframe
@@ -386,11 +409,20 @@ class Labels:
             scalers[width] = scaler
         return models, scalers
 
-    def run(self):
+    def run(self, feature_selection=False):
         self._generate_features()
+
+        if feature_selection:
+            train_features_path = Path(self.garage_dir / "train_features.pickle")
+            test_features_path = Path(self.garage_dir / "test_features.pickle")
+            fs = FeatureSelection(train_features_path, test_features_path)
+            selected_features_df_train, selected_features_df_test = fs.select_features_by_threshold(0.75)
+            fs.filter_dataset(selected_features_df_train.columns.tolist(), selected_features_df_test.columns.tolist(),
+                            self.garage_dir, "train_features.pickle", "test_features.pickle")
+        
         self._generate_knns()
 
 
 if __name__ == "__main__":
-    labels = Labels("geok", 128, "squeeze")
+    labels = Labels("geok", 512, "squeeze")
     labels.run()

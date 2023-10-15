@@ -50,9 +50,9 @@ WANDB = False
 WIDTHS = [0.25, 0.50, 0.75, 1.0]
 
 KNN_WIDTHS = {
-    0.25: 15,
-    0.50: 4,
-    0.75: 4,
+    0.25: 1,
+    0.50: 5,
+    0.75: 1,
 }
 
 # Infest loss weights
