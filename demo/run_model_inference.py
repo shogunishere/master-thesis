@@ -5,26 +5,16 @@
 import os
 from pathlib import Path
 
-import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from plotly import graph_objects as go
-from plotly.subplots import make_subplots
 from torch.utils.data import DataLoader
-from torchmetrics.classification import (
-    BinaryPrecision,
-    BinaryRecall,
-    BinaryF1Score,
-    BinaryJaccardIndex,
-)
-from torchvision.transforms import transforms
 
-from andraz import settings
-from andraz.data.data import ImageImporter
-from andraz.helpers.drive_fetch import setup_env
-from andraz.helpers.masking import get_binary_masks_infest
-from andraz.helpers.metricise import Metricise
-from ioana.inference import AdaptiveWidth
+from segmentation import settings
+from segmentation.data.data import ImageImporter
+from segmentation.helpers.metricise import Metricise
+from segmentation.models.slim_squeeze_unet import SlimSqueezeUNetCofly, SlimSqueezeUNet
+from segmentation.models.slim_unet import SlimUNet
 
 
 class Inference:
@@ -44,18 +34,25 @@ class Inference:
         self.image_resolution = image_resolution
         self.metrics = settings.METRICS if metrics is None else metrics
         self.width_distribution = {x: 0 for x in settings.WIDTHS}
-        # self.width_selection = AdaptiveWidth(
-        #     garage_dir=Path(settings.PROJECT_DIR) / "ioana/garage" / self.model_name
-        # )
         self.width_selection_widths = []
         self.tensor_to_image = ImageImporter("cofly").tensor_to_image
         self.dataset = dataset
 
     @staticmethod
     def _load_test_model(model):
-        return torch.load(
-            Path(settings.PROJECT_DIR) / "andraz/training/garage/" / model
+        parts = model.split("_")
+        if parts[1] == "slim":
+            model_class = SlimUNet(out_channels=2)
+        elif parts[0] == "cofly" or parts[3] == "trans":
+            model_class = SlimSqueezeUNetCofly(out_channels=2)
+        elif parts[0] == "geok":
+            model_class = SlimSqueezeUNet(out_channels=2)
+        model_class.load_state_dict(
+            torch.load(
+                Path(settings.PROJECT_DIR) / f"segmentation/training/garage/" / model
+            )
         )
+        return model_class
 
     def _load_test_data(self):
         ii = ImageImporter(
@@ -160,7 +157,7 @@ class Comparator:
                 plt.show()
 
     def run(self):
-        # Select a model from andraz/training/garage directory and set the
+        # Select a model from segmentation/training/garage directory and set the
         # image resolution tuple to match the image input size of the model
         results = {}
         graph = False

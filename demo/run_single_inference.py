@@ -9,11 +9,12 @@ import torch
 from torchvision import transforms
 from torchvision.utils import draw_segmentation_masks
 
-from andraz import settings
-from andraz.data.data import ImageImporter
-from andraz.helpers.drive_fetch import setup_env
-from andraz.helpers.metricise import Metricise
-from ioana.inference import AdaptiveWidth
+from segmentation import settings
+from segmentation.data.data import ImageImporter
+from segmentation.helpers.metricise import Metricise
+from adaptation.inference import AdaptiveWidth
+from segmentation.models.slim_squeeze_unet import SlimSqueezeUNetCofly, SlimSqueezeUNet
+from segmentation.models.slim_unet import SlimUNet
 
 
 class SingleImageInference:
@@ -29,9 +30,9 @@ class SingleImageInference:
     ):
         self.project_path = Path(settings.PROJECT_DIR)
         if dataset == "infest":
-            self.image_dir = "andraz/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/test/images/"
+            self.image_dir = "segmentation/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/test/images/"
         elif dataset == "geok":
-            self.image_dir = "andraz/data/geok/test/images/"
+            self.image_dir = "segmentation/data/geok/test/images/"
         else:
             raise ValueError("Invalid dataset selected.")
         assert model_architecture in ["slim", "squeeze"]
@@ -42,8 +43,17 @@ class SingleImageInference:
             model_key += "_trans"
         if is_best_fitting:
             model_key += "_opt"
-        self.model = torch.load(
-            Path(settings.PROJECT_DIR) / f"andraz/training/garage/{model_key}.pt"
+        if model_architecture == "slim":
+            self.model = SlimUNet(out_channels=2)
+        elif dataset == "cofly" or is_trans:
+            self.model = SlimSqueezeUNetCofly(out_channels=2)
+        elif dataset == "geok":
+            self.model = SlimSqueezeUNet(out_channels=2)
+        self.model.load_state_dict(
+            torch.load(
+                Path(settings.PROJECT_DIR)
+                / f"segmentation/training/garage/{model_key}.pt"
+            )
         )
         self.fixed_image = fixed_image
         self.save_image = save_image
@@ -133,6 +143,8 @@ class SingleImageInference:
         return img, mask
 
     def _generate_images(self, X, y, y_pred):
+        if not os.path.exists("results"):
+            os.mkdir("results")
         # Generate an original rgb image with predicted mask overlay.
         x_mask = torch.tensor(
             torch.mul(X.clone().detach().cpu(), 255), dtype=torch.uint8
@@ -189,7 +201,8 @@ if __name__ == "__main__":
     # setup_env()
 
     si = SingleImageInference(
-        # geok (new dataset) or infest (forbidden dataset)
+        # geok (new dataset)
+        # dataset="geok",
         dataset="geok",
         # Tuple of two numbers: (128, 128), (256, 256), or (512, 512)
         image_resolution=(
@@ -197,7 +210,7 @@ if __name__ == "__main__":
             256,
         ),
         # slim or squeeze
-        model_architecture="slim",
+        model_architecture="squeeze",
         # Set to a positive integer to select a specific image from the dataset, otherwise random
         fixed_image=-1,
         # Do you want to generate a mask/image overlay

@@ -9,10 +9,10 @@ from torch import flatten
 from torch.utils.data import DataLoader
 from torchmetrics.classification import BinaryPrecision
 
-from andraz import settings
-from andraz.data.data import ImageImporter
-from andraz.helpers.drive_fetch import setup_env
-from andraz.helpers.masking import get_binary_masks_infest
+from segmentation import settings
+from segmentation.data.data import ImageImporter
+from segmentation.helpers.drive_fetch import setup_env
+from segmentation.helpers.masking import get_binary_masks_infest
 
 CLASSES = ["back", "weeds", "lettuce"]
 
@@ -94,7 +94,7 @@ def precision_torchmetrics(test_loader, model):
 
 if __name__ == "__main__":
     # Before running the script create a local_settings.py
-    # file in the andraz directory then set the PROJECT_DIR
+    # file in the segmentation directory then set the PROJECT_DIR
     # variable to point to the project's root directory.
 
     # Prepare the env -- download data and models (only needed on data/models update)

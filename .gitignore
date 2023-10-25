@@ -285,18 +285,18 @@ poetry.toml
 
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm
 
-# Andraz custom entries
-andraz/local_settings.py
-andraz/sandbox.py
-andraz/data/agriadapt/
-andraz/data/cofly/
-andraz/data/geok/
-andraz/training/wandb/
-andraz/training/garage/infest/
-andraz/evaluation/plots/
-andraz/output/
-andraz/training/garage/runs/
-# End of Andraz custom entries
+# segmentation custom entries
+segmentation/local_settings.py
+segmentation/sandbox.py
+segmentation/data/agriadapt/
+segmentation/data/cofly/
+segmentation/data/geok/
+segmentation/training/wandb/
+segmentation/training/garage/infest/
+segmentation/evaluation/plots/
+segmentation/output/
+segmentation/training/garage/runs/
+# End of segmentation custom entries
 
 # Demo custom entries
 demo/groundtruth.png

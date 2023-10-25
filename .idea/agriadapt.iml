@@ -2,21 +2,21 @@
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly/images" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly/labels" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly/labels_1d" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly/overlay" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/training/garage_old" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/evaluation/plots" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/training/wandb" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/cofly" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/agriadapt_old" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/agriadapt" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/output" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/training/garage/infest" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/cofly/images" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/cofly/labels" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/cofly/labels_1d" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/cofly/overlay" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/training/garage_old" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/evaluation/plots" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/training/wandb" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/cofly" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/agriadapt_old" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/agriadapt" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/output" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/training/garage/infest" />
       <excludeFolder url="file://$MODULE_DIR$/demo/images" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/data/geok" />
-      <excludeFolder url="file://$MODULE_DIR$/andraz/training/garage/runs" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/geok" />
+      <excludeFolder url="file://$MODULE_DIR$/segmentation/training/garage/runs" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
