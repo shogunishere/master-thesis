@@ -49,11 +49,13 @@ class SingleImageInference:
         self.save_image = save_image
         self.adaptive_width = AdaptiveWidth(model_key)
         self.tensor_to_image = ImageImporter(dataset).tensor_to_image
+        self.random_image_index = -1
 
     def _get_random_image_path(self):
         images = os.listdir(self.project_path / self.image_dir)
         if self.fixed_image < 0:
-            return images[randint(0, len(images) - 1)]
+            self.random_image_index = randint(0, len(images) - 1)
+            return images[self.random_image_index]
         else:
             return images[
                 self.fixed_image if self.fixed_image < len(images) else len(images) - 1
@@ -91,7 +93,7 @@ class SingleImageInference:
         file_name = self._get_random_image_path()
         img = Image.open(self.project_path / self.image_dir / file_name)
         create_tensor = transforms.ToTensor()
-        smaller = transforms.Resize((128, 128))
+        smaller = transforms.Resize(self.image_resolution)
 
         img = smaller(img)
         img = create_tensor(img)
@@ -146,7 +148,7 @@ class SingleImageInference:
 
         image = draw_segmentation_masks(x_mask, weed_mask, colors=["red"], alpha=0.5)
         plt.imshow(image.permute(1, 2, 0))
-        plt.savefig("prediction.jpg")
+        plt.savefig(f"results/{self.random_image_index}_pred.jpg")
 
         # Draw ground truth
         mask = y.clone().detach()[0]
@@ -155,7 +157,7 @@ class SingleImageInference:
         # mask = torch.cat((weed_mask, lettuce_mask), 0)
         image = draw_segmentation_masks(x_mask, weed_mask, colors=["red"], alpha=0.5)
         plt.imshow(image.permute(1, 2, 0))
-        plt.savefig("groundtruth.jpg")
+        plt.savefig(f"results/{self.random_image_index}_true.jpg")
 
     def infer(self, fixed=-1):
         # Get a random single image from test dataset.
@@ -195,7 +197,7 @@ if __name__ == "__main__":
             256,
         ),
         # slim or squeeze
-        model_architecture="squeeze",
+        model_architecture="slim",
         # Set to a positive integer to select a specific image from the dataset, otherwise random
         fixed_image=-1,
         # Do you want to generate a mask/image overlay
@@ -204,7 +206,8 @@ if __name__ == "__main__":
         is_trans=True,
         # Was segmentation model trained with find_best_fitting (utilising
         # model that has the highest difference in iou between widths
-        is_best_fitting=True,
+        is_best_fitting=False,
     )
-    results = si.infer()
-    print(results)
+    for i in range(10):
+        results = si.infer()
+        print(results)
