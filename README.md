@@ -1,6 +1,6 @@
 # AgriAdapt
 
-<img src="agriadapt.png" height="250">
+<img src="agriadapt.png" height="250"/>
 
 An open source framework that performs on-UAV efficient weeds detection while flying over fields of crops. The backbone
 of the system are [Slimmable Neural Networks](https://github.com/JiahuiYu/slimmable_networks) which enables our system
@@ -66,6 +66,10 @@ split into a training (80%), validation (10%), and testing (10%) set and are loc
 directory. Also included are the segmentation masks of both, weeds and lettuce classes, formatted in YOLOv7 format. All
 logic required to obtain the images, including the segmentation masks can be found in the data.py in
 *segmentation/data*.
+
+Sample of an image with the weeds labels overlay in red:
+
+<img src="sample.png"/>
 
 ## Inference Scripts
 
