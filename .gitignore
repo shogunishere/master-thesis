@@ -290,7 +290,7 @@ segmentation/local_settings.py
 segmentation/sandbox.py
 segmentation/data/agriadapt/
 segmentation/data/cofly/
-segmentation/data/geok/
+#segmentation/data/geok/
 segmentation/training/wandb/
 segmentation/training/garage/infest/
 segmentation/evaluation/plots/

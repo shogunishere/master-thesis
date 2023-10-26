@@ -305,7 +305,8 @@ class Training:
             if epoch > 50:
                 if self._find_best_fitting(res):
                     torch.save(
-                        model.state_dict(), garage_path + "model_{}.pt".format(str(epoch).zfill(4))
+                        model.state_dict(),
+                        garage_path + "model_{}.pt".format(str(epoch).zfill(4)),
                     )
             if self.verbose and epoch % 10 == 0:
                 print(

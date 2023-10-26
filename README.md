@@ -1,131 +1,85 @@
 # AgriAdapt
 
-An open source framework that includes a machine learning pipeline to train segmentation and adaptation models for the
-purpose of weeds detection.
+<img src="agriadapt.png" height="250">
 
-## Getting started
+An open source framework that performs on-UAV efficient weeds detection while flying over fields of crops. The backbone
+of the system are [Slimmable Neural Networks](https://github.com/JiahuiYu/slimmable_networks) which enables our system
+to maintain high level of performance while minimising the energy required to detect weeds. The repository is split into
+two parts, one managing the image segmentation models, while the other is tasked with model width adaptation which is
+the core of any slimmable neural network system.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+Furthermore, the repository includes a novel dataset of 158 labelled images of lettuce fields, taken from a UAV.
+Alongside the images, there are also the belonging segmentation masks that include labels of both, lettuce and weeds
+classes.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it
-easy? [Use the template at the bottom](#editing-this-readme)!
+## Reference
 
-## Add your files
+If you use this library or data in your work, please cite:
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file)
-  or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line)
-  or push an existing Git repository with the following command:
+**Machidon, O. M., Krašovec, A., Machidon, A. L., Pejović, V., Latini, D., Sasidharan, S. T., & Del Frate, F. (2023,
+October). AgriAdapt: Towards Resource-Efficient UAV Weed Detection using Adaptable Deep Learning. In Proceedings of the
+2nd Workshop on Networked Sensing Systems for a Sustainable Society (pp. 193-200).**
+
+## Machine Learning Pipeline
+
+The machine learning pipeline consists of training logic for both, the segmentation models that are tasked to infer
+position of weeds from a UAV image of a field, and the adaptation models that determine the width of the segmentation
+model used on a per-image basis.
+
+### Segmentation
+
+The segmentation part of the library is tasked with defining, training, and saving of the weeds segmentation models. The
+structure of the directory:
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.fri.uni-lj.si/lrk/agriadapt.git
-git branch -M main
-git push -uf origin main
+|-- segmentation
+    |-- data (includes the collected dataset and preprocessing logic)
+    |-- evaluation (currently not used)
+    |-- helpers (various utility functions)
+    |-- models (PyTorch definitions of model architecture)
+    |-- training (model training logic)
+        |-- garage (pretrained models)
 ```
 
-## Integrate with your tools
+To train a new segmentation model, define the model in the *models* directory and run the training script. Inspect
+already implemented models for inspiration.
 
-- [ ] [Set up project integrations](https://gitlab.fri.uni-lj.si/lrk/agriadapt/-/settings/integrations)
+### Adaptation
 
-## Collaborate with your team
+The adaptation part of the library defines the adaptation models, their training and saving, and the image feature
+extraction required to generate the models. Structure of the directory:
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+```
+|-- adaptation
+    |-- garage (pretrained adaptation models)
+    |-- image_processing (image feature extraction)
+    |-- KNN_model (KNN model training logic)
+    |-- feature_selection.py (feature selection of extracted image features)
+    |-- inference.py (get selected model widht for a specific image)
+    |-- labels.py (generate KNN adaptation models for a specific image)
+```
 
-## Test and Deploy
+## Dataset
 
-Use the built-in continuous integration in GitLab.
+The dataset contains 158 images of a field of lettuce with various degree of weeds present in each image. The images are
+split into a training (80%), validation (10%), and testing (10%) set and are located in the *segmentation/data/geok/*
+directory. Also included are the segmentation masks of both, weeds and lettuce classes, formatted in YOLOv7 format. All
+logic required to obtain the images, including the segmentation masks can be found in the data.py in
+*segmentation/data*.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## Inference Scripts
 
-***
+To investigate the performance of different segmentation and adaptation approaches, there are also two demo scripts
+present in the *demo/* root folder of the repository.
 
-# Editing this README
+**run_model_inference.py** calculates different metrics (accuracy, precision, recall, f1 score, Jaccard index) for a
+predefined set of trained models. It also calculates the oracle predictor, which selects the best performing width of a
+model for every image and represents a ceiling result in terms of width selection for a given segmentation model.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to
-structure it however you want - this is just a starting point!). Thank you
-to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are
-suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long
-is better than too short. If you think your README is too long, consider utilizing another form of documentation rather
-than cutting out information.
-
-## Name
-
-Choose a self-explaining name for your project.
-
-## Description
-
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be
-unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your
-project, this is a good place to list differentiating factors.
-
-## Badges
-
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the
-project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see
-GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew.
-However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing
-specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a
-specific context like a particular programming language version or operating system or has dependencies that have to be
-installed manually, also add a Requirements subsection.
-
-## Usage
-
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of
-usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably
-include in the README.
-
-## Support
-
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address,
-etc.
-
-## Roadmap
-
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started.
-Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps
-explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce
-the likelihood that the changes inadvertently break something. Having instructions for running tests is especially
-helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-
-Show your appreciation to those who have contributed to the project.
+**run_single_inference.py** performs weeds segmentation of a single image for a single given model. This script can be
+used as a starting point for on-device inference.
 
 ## License
 
-For open source projects, say how it is licensed.
-
-## Project status
-
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has
-slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or
-owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+This work is licensed
+under [Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/?ref=chooser-v1). 

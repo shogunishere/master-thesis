@@ -15,7 +15,6 @@
       <excludeFolder url="file://$MODULE_DIR$/segmentation/output" />
       <excludeFolder url="file://$MODULE_DIR$/segmentation/training/garage/infest" />
       <excludeFolder url="file://$MODULE_DIR$/demo/images" />
-      <excludeFolder url="file://$MODULE_DIR$/segmentation/data/geok" />
       <excludeFolder url="file://$MODULE_DIR$/segmentation/training/garage/runs" />
     </content>
     <orderEntry type="inheritedJdk" />
