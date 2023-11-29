@@ -86,4 +86,4 @@ used as a starting point for on-device inference.
 ## License
 
 This work is licensed
-under [Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/?ref=chooser-v1). 
+under [Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/?ref=chooser-v1). # master-thesis

@@ -15,7 +15,11 @@ from segmentation.helpers.metricise import Metricise
 from adaptation.inference import AdaptiveWidth
 from segmentation.models.slim_squeeze_unet import SlimSqueezeUNetCofly, SlimSqueezeUNet
 from segmentation.models.slim_unet import SlimUNet
+from segmentation.helpers.masking import get_binary_masks_infest
 
+from metaseg_io import probs_gt_save
+
+import numpy as np # for softmax
 
 class SingleImageInference:
     def __init__(
@@ -32,7 +36,8 @@ class SingleImageInference:
         if dataset == "infest":
             self.image_dir = "segmentation/data/agriadapt/NN_labeled_samples_salad_infesting_plants.v1i.yolov7pytorch/test/images/"
         elif dataset == "geok":
-            self.image_dir = "segmentation/data/geok/test/images/"
+            #self.image_dir = "segmentation/data/geok/test/images/"
+            self.image_dir = "./test/images/"
         else:
             raise ValueError("Invalid dataset selected.")
         assert model_architecture in ["slim", "squeeze"]
@@ -49,6 +54,7 @@ class SingleImageInference:
             self.model = SlimSqueezeUNetCofly(out_channels=2)
         elif dataset == "geok":
             self.model = SlimSqueezeUNet(out_channels=2)
+        print(f"model_key: {model_key}")
         self.model.load_state_dict(
             torch.load(
                 Path(settings.PROJECT_DIR)
@@ -76,6 +82,8 @@ class SingleImageInference:
         Implement an image mask generation according to this:
         https://roboflow.com/formats/yolov7-pytorch-txt
         """
+        #print("label: ")
+        #print(label)
         # Deconstruct a row
         class_id, center_x, center_y, width, height = [
             float(x) for x in label.split(" ")
@@ -101,6 +109,7 @@ class SingleImageInference:
 
     def _get_single_image(self):
         file_name = self._get_random_image_path()
+        img_filename = file_name
         img = Image.open(self.project_path / self.image_dir / file_name)
         create_tensor = transforms.ToTensor()
         smaller = transforms.Resize(self.image_resolution)
@@ -120,6 +129,7 @@ class SingleImageInference:
             ),
             0,
         )
+
         # Then, label by label, add to other classes and remove from background.
         file_name = file_name[:-3] + "txt"
         with open(
@@ -140,7 +150,7 @@ class SingleImageInference:
         img = img[None, :]
         mask = mask[None, :]
 
-        return img, mask
+        return img, mask, img_filename
 
     def _generate_images(self, X, y, y_pred):
         if not os.path.exists("results"):
@@ -174,7 +184,7 @@ class SingleImageInference:
     def infer(self, fixed=-1):
         # Get a random single image from test dataset.
         # Set the fixed attribute to always obtain the same image
-        image, mask = self._get_single_image()
+        image, mask, filename = self._get_single_image()
 
         # Select and set the model width
         width = self.adaptive_width.get_image_width(
@@ -184,7 +194,14 @@ class SingleImageInference:
 
         # Get a prediction
         y_pred = self.model.forward(image)
-
+        print("y_pred")
+        print(y_pred)
+        probs = y_pred.cpu().detach().numpy()
+        probs = probs.squeeze(0) # remove batch dimension
+        probs = probs.transpose(1,2,0) # rearrange dimensions to (256, 256, 2)
+        gt = torch.argmax(mask, dim=1) # convert to class IDs
+        gt = gt.squeeze(0) # remove batch dimension 
+        gt = gt.cpu().numpy()
         metrics = Metricise()
         metrics.calculate_metrics(mask, y_pred, "test")
         results = metrics.report(None)
@@ -193,7 +210,7 @@ class SingleImageInference:
         if self.save_image:
             self._generate_images(image, mask, y_pred)
 
-        return results
+        return results, probs, gt, filename
 
 
 if __name__ == "__main__":
@@ -222,5 +239,22 @@ if __name__ == "__main__":
         is_best_fitting=False,
     )
     for i in range(10):
-        results = si.infer()
+        results, probs, gt, filename = si.infer()
+        print("results")
         print(results)
+        print("filename")
+        print(filename)
+        print("probs")
+        print(probs)
+
+        # apply softmax
+        def softmax(x):
+            e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
+            return e_x / e_x.sum(axis=-1, keepdims=True)
+        
+        probs_softmax = softmax(probs)
+        print("probs_softmax")
+        print(probs_softmax)
+
+        # save the probabilities and ground truth data to hdf5 file
+        probs_gt_save(probs_softmax, gt, filename, i)

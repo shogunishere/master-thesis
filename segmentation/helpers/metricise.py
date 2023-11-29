@@ -69,6 +69,8 @@ class Metricise:
 
     def calculate_metrics(self, y_true, y_pred, name):
         y_pred = get_binary_masks_infest(y_pred, dim=2)
+        print("binary_mask:")
+        print(y_pred)
         assert y_true.shape == y_pred.shape
         for metric in self.metrics:
             for i, pred_class in enumerate(self.classes):
